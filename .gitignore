@@ -1,0 +1,107 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# Build & bundle output
+dist/
+build/
+**/dist/
+**/build/
+dist-preview/
+dist-flow-preview/
+server/ui-dist/
+ui/storybook-static/
+packages/paperclip-runner/runner/target/
+*.tsbuildinfo
+.vite/
+
+# Environment and secrets
+.env
+.env.*
+*.env
+!.env.example
+!.env.runner-e2e.example
+**/token.txt
+*.token
+
+# Embedded PostgreSQL & Paperclip data
+data/
+.paperclip/
+**/instances/
+.paperclip-local/
+.paperclip-runtime/
+drizzle/meta/
+
+# Local browser profiles & daemon cache
+.browser-profile/
+.freellm-*-profile/
+*.crx
+
+# Logs
+*.log
+logs/
+**/logs/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Python environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Scratch, calibration and test artifacts
+scratch/
+calibration/
+coverage/
+test-results/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/runner-e2e/results/
+tests/release-smoke/test-results/
+tests/release-smoke/playwright-report/
+tests/storybook-visual/.cache/
+tests/storybook-visual/.snapshots/
+tests/storybook-visual/baseline-review/
+tests/storybook-visual/test-results/
+tests/storybook-visual/playwright-report/
+
+# Temp files & editor
+*.tmp
+tmp/
+tmp-*
+cli/tmp/
+*.pid
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+feedback-export-*
+diagnostics/
+
+# Legacy / external tool dirs
+.agents/
+.superset/
+.superpowers/
+.claude/worktrees/
+.claude/settings.local.json
+.doc-review-cursor
+.lifecycle-baseline/
+.herenow
+.vercel/
+
+# Check scripts
+check-*.mjs
+!check-db.mjs
+!.github/scripts/check-*.mjs
+!.github/scripts/tests/check-*.mjs
+!scripts/check-*.mjs
+new-agent*.json
+newcompany.json
+seed-*.mjs
+server/check-*.mjs
+server/seed-*.mjs
+packages/db/seed-*.mjs
+cli/package.dev.json

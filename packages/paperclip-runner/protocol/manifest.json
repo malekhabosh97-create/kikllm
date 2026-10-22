@@ -1,0 +1,477 @@
+{
+  "schema": "paperclip.prp.contract_manifest.v1",
+  "protocolVersion": 3,
+  "fixtureVersion": 1,
+  "generatedFrom": [
+    "protocol/schemas",
+    "protocol/fixtures"
+  ],
+  "schemas": [
+    {
+      "path": "schemas/capabilities-v2.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v2/capabilities.schema.json",
+      "sha256": "915a95a0c6a1da2102f8a8fcc65da1013e6f42d655f39b6614578c23af24384d"
+    },
+    {
+      "path": "schemas/capabilities-v3.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v3/capabilities.schema.json",
+      "sha256": "72cfa29e0290800fe712068273d0d764a97900e0930a2ea2f6d530aae959b600"
+    },
+    {
+      "path": "schemas/capabilities.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/capabilities.schema.json",
+      "sha256": "ec307893c72ca349a8efa98c0b2267058b6b359464510c16e7d787398e16ab41"
+    },
+    {
+      "path": "schemas/command-v2.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v2/command.schema.json",
+      "sha256": "2a2f7bc10b0a85cb6aa817260d14ada880c74d85a9654d6a9a553cd8302d0d65"
+    },
+    {
+      "path": "schemas/command-v3.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v3/command.schema.json",
+      "sha256": "92e229e6e49ba7900a5afc7cd37b660a2beb3c042873e33faa0feffda5f35025"
+    },
+    {
+      "path": "schemas/command.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/command.schema.json",
+      "sha256": "7d535d5e5b8c27d6fb512bbc2185d895b7366668a86d082ef7d9290804385422"
+    },
+    {
+      "path": "schemas/conformance-fixture.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/conformance-fixture.schema.json",
+      "sha256": "76be2089344bf785b44fefe200a5db817b9dfec0bda95376dbcf730c267047e2"
+    },
+    {
+      "path": "schemas/conformance-output.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/conformance-output.schema.json",
+      "sha256": "823c24c4fd0bc85ac02ac39a214dd05016885e8b4ffe72a328cfd1793712190c"
+    },
+    {
+      "path": "schemas/event-v2.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v2/event.schema.json",
+      "sha256": "a1d400bf44613e4beb4a1363adbbb0f4fb0f890ea5d889fe94ae08a699b9abc8"
+    },
+    {
+      "path": "schemas/event-v3.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v3/event.schema.json",
+      "sha256": "9e3a8b3a18f3fa198e396fdbbb01ad054c6c7176bd5d974f95a7f040f6adb30c"
+    },
+    {
+      "path": "schemas/event.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/event.schema.json",
+      "sha256": "fd6e493a4cbf819f675fccaf41671b5b44146da71b9b85196489622474a3cc9d"
+    },
+    {
+      "path": "schemas/fixture.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/fixture.schema.json",
+      "sha256": "a53db7dbf2931bbd9a1f309f5f25940b301b71e07a015d4c986b272c39c5a224"
+    },
+    {
+      "path": "schemas/identity.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/identity.schema.json",
+      "sha256": "dadec498197bce09955bfc21d5d8177aeb533c9f1843f4c80a26fcb0b610b146"
+    },
+    {
+      "path": "schemas/native-execution.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/native-execution.schema.json",
+      "sha256": "65a0327e5a43d4f2690d5a6d1e95365997ed8a5d302e71b24ef79e7fc35b59ea"
+    },
+    {
+      "path": "schemas/provider-descriptor.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/provider-descriptor.schema.json",
+      "sha256": "19f139c088f40618f1e98997f1ab00ea4a1e55975b758466572e0ec647ec6bed"
+    },
+    {
+      "path": "schemas/provider-event.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/provider-event.schema.json",
+      "sha256": "07bd97a101ec4e4decaf4ccacabdf4badc40f7a1284adfd3ef0c1e57c70c6421"
+    },
+    {
+      "path": "schemas/question-adapter-fixture.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/question-adapter-fixture.schema.json",
+      "sha256": "2e0203420890429aa711a0dc7bfa62837b2a99a85d99ab593d7281e2c74d7ba1"
+    },
+    {
+      "path": "schemas/question-response.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/question-response.schema.json",
+      "sha256": "2bb1ba028dd7a944b2411a8cf0fb1ea660f70a2285cb6f4b9aa0e365c091a9f5"
+    },
+    {
+      "path": "schemas/question-set.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/question-set.schema.json",
+      "sha256": "022f01fa3634b627361da90512ac4cca68445759b25ebe6284740b2fc669c4fa"
+    },
+    {
+      "path": "schemas/request.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/request.schema.json",
+      "sha256": "7588764837a4ebadc5c63a2f864b2643cad0bcdf8b474bc86b742a1fd7dac34c"
+    },
+    {
+      "path": "schemas/result.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/result.schema.json",
+      "sha256": "5141d976129fffc31b9510bae3b1f4e5e71676a7a8a413bc05b19644ebb76c02"
+    },
+    {
+      "path": "schemas/semantic-tool.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/semantic-tool.schema.json",
+      "sha256": "3cdac03c011159acc73b8ff10a8f37bfdb6d6501ecf5e8628d17cf14dbd1807b"
+    },
+    {
+      "path": "schemas/session-goal.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v2/session-goal.schema.json",
+      "sha256": "757baa1ed251fa14e118c4eb75ff075668d9abd24cd6844322d84f267d960b5f"
+    },
+    {
+      "path": "schemas/stop-reason.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/stop-reason.schema.json",
+      "sha256": "393ad2e2cc7df9effca0efecb784dff0d250c118c656c9ed9f3449379b117a35"
+    },
+    {
+      "path": "schemas/terminal.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/terminal.schema.json",
+      "sha256": "ab24cc1e7aa1fece06efe27a6959ea8bea340b3c1a3663c62b7e36a147e09168"
+    },
+    {
+      "path": "schemas/usage.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/usage.schema.json",
+      "sha256": "5c82f6936511577024530f58001873e5a6bb10c894db2143708fd83027602c17"
+    },
+    {
+      "path": "schemas/workspace-diff.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/workspace-diff.schema.json",
+      "sha256": "948ea963f365a16987b415439af3402276483adc90bca745286ab72e7932f1dd"
+    },
+    {
+      "path": "schemas/workspace-file-reference.schema.json",
+      "id": "https://paperclip.dev/schemas/prp/v1/workspace-file-reference.schema.json",
+      "sha256": "2137e4511effffd5d57336967b03cab17613fa0a6be8200d2ed35b2e59e10bd8"
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "fixtures/codex-driver/driver-conformance.json",
+      "sha256": "8faed0ed479deec7d7f87d04370a3c7fc35739661eeabc1d3bfb5afe0f8257a0",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/conformance-expected-output.json",
+      "sha256": "fa0148c0a3bc83d386e77543d84ac94f3e4f53db6d2b2338fb9cd8b63201f410",
+      "expectation": "accept",
+      "compatibilityCase": "cross-language-output"
+    },
+    {
+      "path": "fixtures/conformance-minimal-run.json",
+      "sha256": "6bc0cdf8ac4939b25f5c7734eccdf90f674aa06eb14b9ca4d6acb9fcbb955e3f",
+      "expectation": "accept",
+      "compatibilityCase": "cross-language-input"
+    },
+    {
+      "path": "fixtures/evals/harness-driver-conformance.json",
+      "sha256": "cd725463e1a7a941310c548af6b439caebd880390fa58e416463e8ab1305a16e",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/evals/native-execution-seeded.json",
+      "sha256": "5a1f111b20755dfdb345e0907c738c463ac1f134801cc9c0fcab4a98f874617a",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/local-runner/scripts/duplicate-terminal.json",
+      "sha256": "37aa1861d31cf0388af1cd25293ed1dddf84ee59b4265f82c5bbde78c86440f7",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/local-runner/scripts/error.json",
+      "sha256": "8e2bf68358cc756dfdeb97326f873833d1ec1cfbbbc628e99dafdb3049bd9d21",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/local-runner/scripts/happy-path.json",
+      "sha256": "11a0633d2868d902efe2e68d013001ce1434ac257349b794039e45cdbf276a44",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/local-runner/scripts/interrupted.json",
+      "sha256": "494797be9be552f1787816a88da94aac4bb6c2c967473a69e45e32571679f2ad",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/local-runner/scripts/linger.json",
+      "sha256": "a029c982b09e9c2fb0fce7fd377db1e478272f933c35e1f25a919e13bc95d208",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/local-runner/scripts/oversized-line.json",
+      "sha256": "3dc563124be9326aa2841b6d0ed8389ad9527bc804190c78eee625b5a9e49c1a",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/local-runner/scripts/permission-input.json",
+      "sha256": "0af0fe9baaee691d4711c989d1b073ed504af57eb768cacf077eb8d9d5ae63ef",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/provider-boundary/local-integrity.json",
+      "sha256": "cf3524efbd2f3abcf4ccb307882bccb6380594881a201cda4d21b45cc85280bd",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/questions/acpx.json",
+      "sha256": "38eddece5d5f21b5d0c1b3bc6338b265a85857fde01aa509513a550e7755ec5f",
+      "expectation": "accept",
+      "compatibilityCase": "acpx-structured-input"
+    },
+    {
+      "path": "fixtures/questions/codex.json",
+      "sha256": "ba3585504972809ef5402ef9bf133c6d9257c4c01010e07a89d4f2642bc06f6f",
+      "expectation": "accept",
+      "compatibilityCase": "codex-structured-input"
+    },
+    {
+      "path": "fixtures/questions/opencode.json",
+      "sha256": "3761fd4ed066bb56f9e58eb09b2cc0258be0d05eaa5aa35ccb5a3fd3e0d930d0",
+      "expectation": "accept",
+      "compatibilityCase": "opencode-structured-input"
+    },
+    {
+      "path": "fixtures/replay/budget-cost-stop-reason.json",
+      "sha256": "8f1d3bafa40fb659b65770d2f4f1b9ae4feb8e487a9a47951d4b28df855832ab",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/duplicate-event.json",
+      "sha256": "47ac87ada1821d0362d2557f6cd93dc4d0e9435db6b3652a090c9bb975ab14a9",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/failed-run.json",
+      "sha256": "6a8f5a554d36364c799eba818fcce528368defe1b7d976cd24de877ae78547f9",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/golden/budget-cost-stop-reason.snapshot.json",
+      "sha256": "a771bbca978bd2cf6efc88a95f3b21733e55f7e7287a36f31cf60ad45337644f",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/budget-cost-stop-reason.summary.json",
+      "sha256": "4c89d056cc68008e2311e17acd46d3f2e6d08e1a857fa1bcc340badc92627082",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/duplicate-event.snapshot.json",
+      "sha256": "b79c7b698123f70a406774f3295111091894453f9727dd76a6ea5451ff0a2193",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/duplicate-event.summary.json",
+      "sha256": "2d89ea724f7c64a49f64fee50d0e182a316e4f4b255127c391b6c2582e73aa97",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/failed-run.snapshot.json",
+      "sha256": "5d0cae094fa1fe6081976e8c07cdaa34354c064519e72d62c4043057d98105ce",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/failed-run.summary.json",
+      "sha256": "225ca4382f001e43dafcc4b163dfd61ad2f2b3ecab34930b0d85074fe8ad125b",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/happy-path.snapshot.json",
+      "sha256": "31558ad231bafe051720ee404fb0198c10e4202de8d6868d272715deeb8fc237",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/happy-path.summary.json",
+      "sha256": "23feeb0f877d871e3f81e8338f3fbf6e6378ecec5a18d9f4b374e9483032b6bb",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/interrupted-run.snapshot.json",
+      "sha256": "c744697f98ed3b6498fac888fc7fade348b80f31cbb1a0ac454dc832768fc101",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/interrupted-run.summary.json",
+      "sha256": "7e262233c2718ffb5d371e28a19b2509754a9ad2f4fd7306fbc09cc23dfc6881",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-artifact-happy-path.snapshot.json",
+      "sha256": "621ca97a7f917dd6627459c9c322ee7b47bdb8a28de3ca3a7fe4ad96059ad503",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-artifact-happy-path.summary.json",
+      "sha256": "6f60a214848b8c5013713c7fb3a7f29caf6d073339ca116dddc8cdd2e7d4c880",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-conflict-duplicate-retry.snapshot.json",
+      "sha256": "070364c7261d0319a0ce2dff50c4fb797a04be780ccc72d6f4006962816b9664",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-conflict-duplicate-retry.summary.json",
+      "sha256": "b092f7da1d0850f2c25bb9ec152b9122b8fe3dd4be3fc1c8bcb4a4df248abcf2",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-denial-redaction.snapshot.json",
+      "sha256": "70aa0d5dc874ca347a57b0d234e7406e9d0c4beea090a62d7d266b84e8d98d72",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-denial-redaction.summary.json",
+      "sha256": "3710cd215bd8fc7c219e63a4d59ab44eb9f36001bc0eec9b2a735b2df6a96c83",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-governance-wake-monitor.snapshot.json",
+      "sha256": "e41d35b1c32efbba462ab74ce9c8d465941c2bd940b71a06721af424ac9e0bfb",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-governance-wake-monitor.summary.json",
+      "sha256": "2794368dc6825fb6164fbcadba1f72e612cd9d1e7294aa7e01bfcbddd8ae3697",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-unknown-optional-envelope.snapshot.json",
+      "sha256": "40685065aea56fedf843d073f245a2a1fab30416cc501df04f0c762db8a48d74",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/semantic-tool-unknown-optional-envelope.summary.json",
+      "sha256": "0f9e444e2581285fac5dc7e6a0043e58de9d6b2fe0f5a52e7e71bddf5e1308a3",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/source-gap.snapshot.json",
+      "sha256": "a796b8cc9fcc02edb7ad29d0566766837372b291c63810162df383541c936286",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/source-gap.summary.json",
+      "sha256": "8129578e06caefe22551a1ea910227302f3041f540bc7e2e239052b711956e2c",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/unknown-optional-fields.snapshot.json",
+      "sha256": "6776553f7036aaff54dc63ef21d57304fccc8fae2d7a5ae0af22c94eba12fc8c",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/golden/unknown-optional-fields.summary.json",
+      "sha256": "e3468d985f448d7b120c85265da6d58b553122fcd52399ab277d995fa867df46",
+      "expectation": "accept",
+      "compatibilityCase": "deterministic-replay-oracle"
+    },
+    {
+      "path": "fixtures/replay/happy-path.json",
+      "sha256": "3f51df916acf52aeeeb01491ae42527731d520567a472a3105c5a5ac6def930a",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/interrupted-run.json",
+      "sha256": "d750c1d51fe84dc281e2541f12bd49472d0d647dbec61f61089103b676d272db",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/semantic-tool-artifact-happy-path.json",
+      "sha256": "45dbb6adb2963f869dddabcf2369b319e7776e624fa6d5f9e62f3e58378ffd21",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/semantic-tool-conflict-duplicate-retry.json",
+      "sha256": "bd5c756d2b62f4792727947556d1bb22ef83a9adeb8f98796dd0378f413b9e1d",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/semantic-tool-denial-redaction.json",
+      "sha256": "1a5b79f84f52f9840c75d9ebfc889282fdbb44eae650fd7abbccd035341e73b0",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/semantic-tool-governance-wake-monitor.json",
+      "sha256": "f5d50fa5264b1904b3c950d00da9a94137968971ce3822b266b0324a8ae5f799",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/semantic-tool-unknown-optional-envelope.json",
+      "sha256": "ee35242d741919418d387afee277c549e761f49cdd938865e86e07b054ff0057",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/semantic-tool-unsupported-required-version.json",
+      "sha256": "dc2d5117398d1473e6c98da92a3f5543214b7298ff8763afe9bc5e03727b0289",
+      "expectation": "reject",
+      "compatibilityCase": "unknown-required-version"
+    },
+    {
+      "path": "fixtures/replay/source-gap.json",
+      "sha256": "aa1ea35153361422240a509383f9c5f1c1987194e8693646f6a260a5ebdcca9d",
+      "expectation": "accept",
+      "compatibilityCase": "canonical"
+    },
+    {
+      "path": "fixtures/replay/unknown-optional-fields.json",
+      "sha256": "43c04132038295fe283b36b500ff75984c1a84d224e2126c2dc87cfa81d1726e",
+      "expectation": "accept",
+      "compatibilityCase": "additive-optional-fields"
+    },
+    {
+      "path": "fixtures/replay/unsupported-required-version.json",
+      "sha256": "184c4559a73a695f69f2ec1674c4015610b5619105eef81ba9ec7dd36fc11613",
+      "expectation": "reject",
+      "compatibilityCase": "unknown-required-version"
+    }
+  ]
+}

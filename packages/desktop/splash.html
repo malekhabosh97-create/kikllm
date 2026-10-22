@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FreeLLM Work</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      user-select: none;
+    }
+
+    body {
+      background: linear-gradient(135deg, #090d16 0%, #0f172a 50%, #1e1b4b 100%);
+      color: #f8fafc;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .container {
+      width: 480px;
+      text-align: center;
+      padding: 40px;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.15);
+      animation: fadeIn 0.6s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .logo-box {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 20px;
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.5);
+      position: relative;
+    }
+
+    .logo-box::after {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #60a5fa, #a855f7);
+      z-index: -1;
+      opacity: 0.4;
+      filter: blur(8px);
+      animation: pulse 2.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+
+    .logo-svg {
+      width: 38px;
+      height: 38px;
+      fill: #ffffff;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 28px;
+      letter-spacing: 0.2px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .progress-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 45%;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      border-radius: 999px;
+      animation: indeterminate 1.8s infinite ease-in-out;
+    }
+
+    @keyframes indeterminate {
+      0% { right: -40%; width: 30%; }
+      50% { right: 30%; width: 50%; }
+      100% { right: 100%; width: 30%; }
+    }
+
+    .status-text {
+      font-size: 13px;
+      color: #38bdf8;
+      font-weight: 500;
+      min-height: 20px;
+      margin-bottom: 22px;
+      transition: all 0.2s ease;
+    }
+
+    .status-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: right;
+      padding: 14px 16px;
+      background: rgba(15, 23, 42, 0.45);
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-pending {
+      background: rgba(148, 163, 184, 0.12);
+      color: #94a3b8;
+    }
+
+    .badge-running {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+    }
+
+    .badge-ready {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo-box">
+      <svg class="logo-svg" viewBox="0 0 24 24">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+      </svg>
+    </div>
+
+    <h1>FreeLLM Work</h1>
+    <p class="subtitle">بيئة العمل المستقلة لفرق الوكلاء الأذكياء</p>
+
+    <div class="progress-bar">
+      <div class="progress-fill"></div>
+    </div>
+
+    <div class="status-text" id="status-message">جاري تهيئة الخدمات الداخلية...</div>
+
+    <div class="status-list">
+      <div class="status-item">
+        <span>خادم بيبركليب (Paperclip 3100):</span>
+        <span class="badge badge-running" id="badge-server"><span class="dot"></span> جاري الفحص</span>
+      </div>
+      <div class="status-item">
+        <span>وسيط المتصفح الذكي (Browser Daemon 3150):</span>
+        <span class="badge badge-pending" id="badge-daemon"><span class="dot"></span> قيد الانتظار</span>
+      </div>
+      <div class="status-item">
+        <span>محرك متصفح النماذج (Chrome CDP 9222):</span>
+        <span class="badge badge-pending" id="badge-chrome"><span class="dot"></span> قيد الانتظار</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Exposed API from preload if available
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data) return;
+      if (data.status) {
+        document.getElementById('status-message').textContent = data.status;
+      }
+      if (data.server) {
+        const el = document.getElementById('badge-server');
+        el.className = 'badge ' + data.server.className;
+        el.innerHTML = '<span class="dot"></span> ' + data.server.text;
+      }
+      if (data.daemon) {
+        const el = document.getElementById('badge-daemon');
+        el.className = 'badge ' + data.daemon.className;
+        el.innerHTML = '<span class="dot"></span> ' + data.daemon.text;
+      }
+      if (data.chrome) {
+        const el = document.getElementById('badge-chrome');
+        el.className = 'badge ' + data.chrome.className;
+        el.innerHTML = '<span class="dot"></span> ' + data.chrome.text;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FreeLLM Work - بيئة العمل والوكيل الذكي</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Marked for Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Highlight.js -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            },
+            darkBg: '#0f172a',
+            darkCard: '#1e293b',
+            darkBorder: '#334155'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body {
+      font-family: 'Cairo', sans-serif;
+      user-select: none;
+    }
+    code, pre {
+      font-family: 'JetBrains Mono', monospace;
+      direction: ltr;
+      text-align: left;
+    }
+    .markdown-body pre {
+      background-color: #0d1117;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+    .markdown-body p {
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="bg-[#0b0f19] text-slate-100 h-screen flex flex-col overflow-hidden">
+
+  <!-- Header -->
+  <header class="h-14 border-b border-darkBorder bg-[#0f172a]/80 backdrop-blur px-5 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold">
+        ⚡
+      </div>
+      <div class="flex items-center gap-2">
+        <h1 class="font-bold text-lg tracking-wide text-white">FreeLLM Work</h1>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">Agent Studio</span>
+      </div>
+    </div>
+
+    <!-- Middle: Model Picker -->
+    <div class="flex items-center gap-2 bg-[#1e293b] border border-darkBorder px-3 py-1.5 rounded-xl">
+      <i data-lucide="cpu" class="w-4 h-4 text-emerald-400"></i>
+      <span class="text-xs text-slate-400">النموذج النشط:</span>
+      <select id="modelSelect" class="bg-transparent text-sm font-semibold text-white focus:outline-none cursor-pointer">
+        <option value="deepseek" class="bg-[#1e293b]">DeepSeek (chat.deepseek.com)</option>
+        <option value="gemini" class="bg-[#1e293b]">Google Gemini (gemini.google.com)</option>
+        <option value="arena" class="bg-[#1e293b]">LMSYS Arena (lmarena.ai)</option>
+      </select>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-3">
+      <button onclick="openLoginWindow()" class="flex items-center gap-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg transition-all shadow-lg shadow-emerald-950">
+        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        <span>فتح المتصفح لتسجيل الدخول</span>
+      </button>
+      
+      <div class="flex items-center gap-1.5 text-xs text-slate-400 border-r border-darkBorder pr-3">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span id="systemStatus">جاهز</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Body: Split View -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- Left: Chat Panel (60%) -->
+    <div class="w-3/5 flex flex-col border-l border-darkBorder bg-[#0f172a]">
+      <!-- Messages List -->
+      <div id="messagesContainer" class="flex-1 overflow-y-auto p-6 space-y-6">
+        <!-- Welcome Message -->
+        <div class="flex gap-4 items-start">
+          <div class="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0 font-bold text-xs shadow-md">
+            AI
+          </div>
+          <div class="flex-1 bg-[#1e293b] border border-darkBorder rounded-2xl p-4 text-sm leading-relaxed shadow-sm">
+            <h3 class="font-bold text-white mb-2 flex items-center gap-2">
+              <span>مرحباً بك في FreeLLM Work! 🚀</span>
+            </h3>
+            <p class="text-slate-300 mb-3">
+              برنامجك متصل الآن مباشرة بمتصفح الويب المدمج. يمكنك استخدام حساباتك المجانية في <strong>DeepSeek</strong> أو <strong>Gemini</strong> أو <strong>LMSYS Arena</strong> بكامل قدراتها دون الحاجة لمفاتيح API مدفوعة.
+            </p>
+            <div class="bg-slate-900/60 rounded-xl p-3 border border-slate-700/50 text-xs text-slate-400 space-y-1.5">
+              <div class="flex items-center gap-2">
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+                <span>لتسجيل الدخول لأول مرة: اضغط زر <strong>"فتح المتصفح"</strong> بالأعلى وسجل حساباتك مرة واحدة فقط.</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+                <span>المهارات (Skills) ومساحة العمل مفعلة محلياً على جهازك.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="p-4 bg-[#111827] border-t border-darkBorder">
+        <div class="relative bg-[#1e293b] border border-darkBorder rounded-2xl shadow-inner focus-within:border-emerald-500/60 transition-all p-3">
+          <textarea id="promptInput" rows="3" placeholder="اطلب من الوكيل كتابة كود، تخطيط مشروع، أو حل مشكلة..." 
+            class="w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none leading-relaxed"></textarea>
+          
+          <div class="flex items-center justify-between pt-2 border-t border-slate-800/80 mt-1">
+            <div class="flex items-center gap-3 text-xs text-slate-400">
+              <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+                <input type="checkbox" id="checkSkills" checked class="accent-emerald-500 rounded">
+                <span>تضمين المهارات</span>
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+                <input type="checkbox" id="checkWorkspace" checked class="accent-emerald-500 rounded">
+                <span>سياق مساحة العمل</span>
+              </label>
+            </div>
+
+            <button id="sendBtn" onclick="sendMessage()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md">
+              <span>إرسال للنموذج</span>
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Workspace & Skills Panel (40%) -->
+    <div class="w-2/5 flex flex-col bg-[#0b0f19]">
+      <!-- Tab Headers -->
+      <div class="flex border-b border-darkBorder bg-[#0f172a] px-4 pt-2 shrink-0">
+        <button id="tabWorkspaceBtn" onclick="switchTab('workspace')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2">
+          <i data-lucide="folder-tree" class="w-3.5 h-3.5"></i>
+          <span>مساحة العمل (Files)</span>
+        </button>
+        <button id="tabSkillsBtn" onclick="switchTab('skills')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <span>المهارات (Skills)</span>
+          <span id="skillsBadge" class="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.2 rounded-full">3</span>
+        </button>
+      </div>
+
+      <!-- Tab Content 1: Workspace Files -->
+      <div id="tabWorkspace" class="flex-1 flex flex-col overflow-hidden p-4">
+        <div class="flex items-center justify-between mb-3 text-xs text-slate-400">
+          <div class="flex items-center gap-1.5">
+            <i data-lucide="folder" class="w-4 h-4 text-emerald-400"></i>
+            <span id="workspacePathDisplay" class="font-mono text-[11px] truncate max-w-[200px]">workspace/</span>
+          </div>
+          <button onclick="loadWorkspaceFiles()" class="hover:text-emerald-400 flex items-center gap-1 text-[11px]">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+            <span>تحديث</span>
+          </button>
+        </div>
+
+        <div id="fileListContainer" class="flex-1 overflow-y-auto space-y-1 pr-1">
+          <!-- Files will load here -->
+        </div>
+
+        <!-- File Viewer Modal / Bottom Panel -->
+        <div id="fileViewerCard" class="hidden mt-3 bg-[#1e293b] border border-darkBorder rounded-xl p-3 flex flex-col max-h-56">
+          <div class="flex items-center justify-between mb-2">
+            <span id="fileViewerName" class="text-xs font-mono text-emerald-400">file.py</span>
+            <button onclick="closeFileViewer()" class="text-slate-400 hover:text-white text-xs">&times; إغلاق</button>
+          </div>
+          <pre id="fileViewerContent" class="flex-1 overflow-auto text-xs text-slate-300 bg-slate-900 p-2.5 rounded-lg font-mono"></pre>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Skills Catalog -->
+      <div id="tabSkills" class="hidden flex-1 flex flex-col overflow-y-auto p-4 space-y-3">
+        <div class="text-xs text-slate-400 mb-1 leading-relaxed">
+          المهارات توجه تفكير الوكيل وتزوده بطرق منهجية لتنفيذ المهام وحفظ الذاكرة:
+        </div>
+        <div id="skillsListContainer" class="space-y-2.5">
+          <!-- Skills loaded here -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Notification Bar -->
+  <footer class="h-7 bg-[#090d16] border-t border-darkBorder/60 px-4 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+    <div class="flex items-center gap-2">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+      <span id="footerStatus">نظام الوكيل متصل وجاهز للعمل</span>
+    </div>
+    <div class="flex items-center gap-4 text-slate-500">
+      <span>Playwright Engine: v1.63</span>
+      <span>FastAPI Local Bridge: 127.0.0.1:8000</span>
+    </div>
+  </footer>
+
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Tab Switching
+    function switchTab(tab) {
+      const isWorkspace = tab === 'workspace';
+      document.getElementById('tabWorkspace').classList.toggle('hidden', !isWorkspace);
+      document.getElementById('tabSkills').classList.toggle('hidden', isWorkspace);
+
+      document.getElementById('tabWorkspaceBtn').className = isWorkspace
+        ? 'px-4 py-2.5 text-xs font-bold border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2'
+        : 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2';
+
+      document.getElementById('tabSkillsBtn').className = !isWorkspace
+        ? 'px-4 py-2.5 text-xs font-bold border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2'
+        : 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2';
+    }
+
+    // Open Login Window
+    async function openLoginWindow() {
+      document.getElementById('systemStatus').innerText = 'يتم فتح المتصفح...';
+      try {
+        const res = await fetch('/api/browser/open-login', { method: 'POST' });
+        const data = await res.json();
+        alert('تم فتح المتصفح بنجاح! تفضل بتسجيل الدخول في التبويبات المفتوحة وسيحفظ النظام الجلسة تلقائياً.');
+        document.getElementById('systemStatus').innerText = 'المتصفح نشط';
+      } catch (err) {
+        alert('حدث خطأ أثناء فتح المتصفح: ' + err.message);
+        document.getElementById('systemStatus').innerText = 'خطأ';
+      }
+    }
+
+    // Load Workspace Files
+    async function loadWorkspaceFiles() {
+      try {
+        const res = await fetch('/api/workspace/files');
+        const files = await res.json();
+        const container = document.getElementById('fileListContainer');
+        container.innerHTML = '';
+
+        if (files.length === 0) {
+          container.innerHTML = '<div class="text-xs text-slate-500 py-4 text-center">لا توجد ملفات بعد في مجلد مساحة العمل.</div>';
+          return;
+        }
+
+        files.forEach(f => {
+          const item = document.createElement('div');
+          item.className = 'flex items-center justify-between p-2 rounded-lg hover:bg-[#1e293b] cursor-pointer text-xs text-slate-300 transition-all border border-transparent hover:border-slate-700/60';
+          item.innerHTML = `
+            <div class="flex items-center gap-2">
+              <i data-lucide="${f.is_dir ? 'folder' : 'file-code'}" class="w-4 h-4 ${f.is_dir ? 'text-amber-400' : 'text-emerald-400'}"></i>
+              <span class="font-mono text-[11px]">${f.name}</span>
+            </div>
+            <span class="text-[10px] text-slate-500">${f.is_dir ? 'مجلد' : (f.size + ' B')}</span>
+          `;
+          if (!f.is_dir) {
+            item.onclick = () => viewFile(f.path, f.name);
+          }
+          container.appendChild(item);
+        });
+        lucide.createIcons();
+      } catch (e) {
+        console.error('Error loading files:', e);
+      }
+    }
+
+    async function viewFile(path, name) {
+      try {
+        const res = await fetch(`/api/workspace/file?path=${encodeURIComponent(path)}`);
+        const data = await res.json();
+        document.getElementById('fileViewerCard').classList.remove('hidden');
+        document.getElementById('fileViewerName').innerText = name;
+        document.getElementById('fileViewerContent').innerText = data.content;
+      } catch (e) {
+        alert('تعذر فتح الملف: ' + e.message);
+      }
+    }
+
+    function closeFileViewer() {
+      document.getElementById('fileViewerCard').classList.add('hidden');
+    }
+
+    // Load Skills
+    async function loadSkills() {
+      try {
+        const res = await fetch('/api/skills');
+        const skills = await res.json();
+        const container = document.getElementById('skillsListContainer');
+        container.innerHTML = '';
+        document.getElementById('skillsBadge').innerText = skills.filter(s => s.enabled).length;
+
+        skills.forEach(s => {
+          const card = document.createElement('div');
+          card.className = 'p-3 rounded-xl bg-[#1e293b] border border-darkBorder flex items-start justify-between gap-3';
+          card.innerHTML = `
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-semibold text-xs text-white">${s.name}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">Skill</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">${s.description || 'لا يوجد وصف'}</p>
+            </div>
+            <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSkill('${s.name}', this.checked)" class="accent-emerald-500 mt-1 cursor-pointer">
+          `;
+          container.appendChild(card);
+        });
+      } catch (e) {
+        console.error('Error loading skills:', e);
+      }
+    }
+
+    async function toggleSkill(name, enabled) {
+      await fetch(`/api/skills/${encodeURIComponent(name)}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      loadSkills();
+    }
+
+    // Send Message
+    async function sendMessage() {
+      const input = document.getElementById('promptInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const model = document.getElementById('modelSelect').value;
+      const includeSkills = document.getElementById('checkSkills').checked;
+      const includeWorkspace = document.getElementById('checkWorkspace').checked;
+
+      // Add User Message to UI
+      appendMessage('user', text);
+      input.value = '';
+
+      // Prepare AI Message placeholder
+      const aiMsgEl = appendMessage('ai', 'جاري التواصل مع المتصفح وجمع الرد...');
+      document.getElementById('footerStatus').innerText = `الموديل (${model}) يقوم بالتوليد الآن...`;
+      document.getElementById('sendBtn').disabled = true;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            prompt: text,
+            include_skills: includeSkills,
+            include_workspace_context: includeWorkspace
+          })
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const textChunk = decoder.decode(value);
+          const lines = textChunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.substring(6));
+                if (data.chunk) {
+                  fullResponse += data.chunk;
+                  aiMsgEl.innerHTML = marked.parse(fullResponse);
+                  aiMsgEl.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                  });
+                }
+              } catch (err) {}
+            }
+          }
+        }
+
+        document.getElementById('footerStatus').innerText = 'اكتمل الرد بنجاح.';
+        loadWorkspaceFiles(); // Refresh file list in case agent modified files
+      } catch (err) {
+        aiMsgEl.innerHTML = `<span class="text-rose-400">حدث خطأ: ${err.message}</span>`;
+      } finally {
+        document.getElementById('sendBtn').disabled = false;
+      }
+    }
+
+    function appendMessage(sender, text) {
+      const container = document.getElementById('messagesContainer');
+      const msgWrapper = document.createElement('div');
+      msgWrapper.className = 'flex gap-4 items-start';
+
+      const isUser = sender === 'user';
+      const avatar = isUser
+        ? '<div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0 font-bold text-xs shadow-md">أنت</div>'
+        : '<div class="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0 font-bold text-xs shadow-md">AI</div>';
+
+      const bodyClass = isUser
+        ? 'flex-1 bg-slate-800/80 border border-slate-700 rounded-2xl p-4 text-sm leading-relaxed text-slate-100 shadow-sm'
+        : 'flex-1 bg-[#1e293b] border border-darkBorder rounded-2xl p-4 text-sm leading-relaxed text-slate-200 markdown-body shadow-sm';
+
+      msgWrapper.innerHTML = `
+        ${avatar}
+        <div class="${bodyClass}">
+          ${marked.parse(text)}
+        </div>
+      `;
+
+      container.appendChild(msgWrapper);
+      container.scrollTop = container.scrollHeight;
+      return msgWrapper.querySelector('.markdown-body') || msgWrapper.querySelector('.flex-1');
+    }
+
+    // Initial Load
+    loadWorkspaceFiles();
+    loadSkills();
+  </script>
+</body>
+</html>
