@@ -15,6 +15,7 @@ import {
   executeTool,
   type ParsedToolCall,
 } from "./tool-executor.js";
+import { getSiteAdapter, type ChatSession } from "./browser-provider/index.js";
 
 export interface UnifiedTurnEvent {
   type:
@@ -70,6 +71,88 @@ interface SingleTurnResult {
   cancelled: boolean;
 }
 
+const activeInProcessSessions = new Map<string, ChatSession>();
+
+async function executeInProcessGeminiTurn(params: {
+  prompt: string;
+  modelId: string;
+  sessionId: string;
+  systemPrompt: string;
+  onEvent?: (event: UnifiedTurnEvent) => Promise<void> | void;
+  signal?: AbortSignal;
+}): Promise<SingleTurnResult> {
+  const { prompt, modelId, sessionId, systemPrompt, onEvent, signal } = params;
+  try {
+    const adapter = getSiteAdapter("gemini");
+    let session = activeInProcessSessions.get(sessionId);
+    if (!session) {
+      session = await adapter.newChat(modelId);
+      activeInProcessSessions.set(sessionId, session);
+      if (systemPrompt) {
+        await session.send(systemPrompt + "\n\n" + prompt);
+      } else {
+        await session.send(prompt);
+      }
+    } else {
+      await session.send(prompt);
+    }
+
+    const reply = await session.waitForReply({
+      onChunk: async (chunk) => {
+        if (onEvent) await onEvent({ type: "token", text: chunk });
+      },
+      signal,
+    });
+
+    if (reply.status === "blocked") {
+      if (onEvent) {
+        await onEvent({
+          type: "error",
+          message: `Browser blocked: ${reply.blocker} (${reply.blockerDetails || ""})`,
+        });
+      }
+      return {
+        fullResponse: reply.text,
+        lastStatus: `BLOCKED:${reply.blocker}`,
+        hasError: true,
+        cancelled: false,
+      };
+    }
+
+    if (reply.status === "timeout") {
+      if (onEvent) {
+        await onEvent({
+          type: "error",
+          message: `Browser response timeout. Snapshot saved to ${reply.rawHtmlSnapshot || ""}`,
+        });
+      }
+      return {
+        fullResponse: reply.text,
+        lastStatus: "TIMEOUT",
+        hasError: true,
+        cancelled: false,
+      };
+    }
+
+    return {
+      fullResponse: reply.text,
+      lastStatus: "READY",
+      hasError: false,
+      cancelled: false,
+    };
+  } catch (err: any) {
+    if (onEvent) {
+      await onEvent({ type: "error", message: err.message });
+    }
+    return {
+      fullResponse: "",
+      lastStatus: "ERROR",
+      hasError: true,
+      cancelled: false,
+    };
+  }
+}
+
 function executeDaemonTurn(params: {
   prompt: string;
   platform: "gemini" | "deepseek";
@@ -94,6 +177,18 @@ function executeDaemonTurn(params: {
     onEvent,
     signal,
   } = params;
+
+  // Strangler facade: Route Gemini through in-process browser provider
+  if (platform === "gemini") {
+    return executeInProcessGeminiTurn({
+      prompt,
+      modelId,
+      sessionId,
+      systemPrompt,
+      onEvent,
+      signal,
+    });
+  }
 
   return new Promise((resolve) => {
     const postData = JSON.stringify({

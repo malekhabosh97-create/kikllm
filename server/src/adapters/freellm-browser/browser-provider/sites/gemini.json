@@ -1,0 +1,108 @@
+{
+  "id": "gemini",
+  "name": "Google Gemini",
+  "url": "https://gemini.google.com/app",
+  "newChatUrl": "https://gemini.google.com/app",
+  "loginIndicators": [
+    "button:has-text('Sign in')",
+    "a:has-text('Sign in')",
+    "a[href*='accounts.google.com']",
+    "[data-action-id='sign-in']"
+  ],
+  "chatInput": [
+    "rich-textarea div[contenteditable='true']",
+    "div.ql-editor[role='textbox']",
+    "div[role='textbox'][contenteditable='true']",
+    "rich-textarea",
+    "textarea"
+  ],
+  "sendButton": [
+    "button[aria-label*='Send message']",
+    "button.send-button",
+    "button[aria-label*='Send']",
+    "[data-test-id='send-button']",
+    "button:has([data-icon='send'])"
+  ],
+  "stopButton": [
+    "button[aria-label*='Stop response']",
+    "button.stop-response-button",
+    "button[aria-label*='Stop']",
+    "[data-test-id='stop-button']"
+  ],
+  "lastMessage": [
+    "message-content",
+    ".response-content",
+    ".model-response-text",
+    "model-response"
+  ],
+  "messageText": [
+    ".markdown",
+    ".model-response-text",
+    "message-content"
+  ],
+  "attachButton": [
+    "button[aria-label*='Upload']",
+    "button[aria-label='Upload & tools']",
+    "button[aria-label*='Add files']",
+    "button[aria-label*='Attach']"
+  ],
+  "fileInput": [
+    "input[type='file'].hidden-file-input",
+    "input[type='file']"
+  ],
+  "modelMenu": [
+    "button[data-test-id='bard-mode-menu-button']",
+    "button[aria-label*='mode picker']",
+    "button:has-text('Gemini')"
+  ],
+  "modelOptions": {
+    "gemini-flash-lite": {
+      "label": "Flash-Lite",
+      "selector": "gem-menu-item:has-text('Flash-Lite')"
+    },
+    "gemini-flash": {
+      "label": "Flash",
+      "selector": "gem-menu-item:has-text('Flash')"
+    },
+    "gemini-pro": {
+      "label": "Pro",
+      "selector": "gem-menu-item:has-text('Pro')"
+    },
+    "gemini-argon": {
+      "label": "Argon",
+      "selector": "gem-menu-item:has-text('Argon')"
+    }
+  },
+  "blockers": [
+    {
+      "type": "login_blocked",
+      "selector": "text=Couldn't sign you in, text=This browser or app may not be secure",
+      "textPattern": "This browser or app may not be secure|Couldn't sign you in|automated queries"
+    },
+    {
+      "type": "login",
+      "selector": "a:has-text('Sign in'), button:has-text('Sign in')",
+      "urlPattern": "accounts\\.google\\.com"
+    },
+    {
+      "type": "captcha",
+      "selector": "#challenge-running, #challenge-stage, .g-recaptcha, iframe[src*='recaptcha'], [id*='captcha']",
+      "textPattern": "recaptcha|security check|verify it's you|prove you're human"
+    },
+    {
+      "type": "rate_limit",
+      "selector": ".rate-limit-message, [data-test-id='rate-limit']",
+      "textPattern": "rate limit|too many requests|try again in [0-9]+|please wait"
+    },
+    {
+      "type": "quota_exhausted",
+      "selector": ".quota-exceeded",
+      "textPattern": "quota exceeded|reached your daily limit|limit reached"
+    }
+  ],
+  "completion": {
+    "stabilityMs": 2500,
+    "pollIntervalMs": 500,
+    "maxTimeoutMs": 300000
+  }
+}
