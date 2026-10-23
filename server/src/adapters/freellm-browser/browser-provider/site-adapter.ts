@@ -7,6 +7,7 @@ import type {
   SiteHealth,
   ChatSession,
   Blocker,
+  LiveModelInfo,
 } from "./types.js";
 import { PlaywrightChatSession } from "./chat-session.js";
 
@@ -164,11 +165,15 @@ export class BasePlaywrightSiteAdapter implements SiteAdapter {
     }
   }
 
-  async listModels(): Promise<string[]> {
+  async listModels(): Promise<LiveModelInfo[]> {
     if (this.config.modelOptions) {
-      return Object.keys(this.config.modelOptions);
+      return Object.entries(this.config.modelOptions).map(([key, opt]) => ({
+        id: key,
+        label: opt.label,
+        locked: false,
+      }));
     }
-    return ["default"];
+    return [{ id: "default", label: "Default", locked: false }];
   }
 
   async newChat(modelId?: string): Promise<ChatSession> {

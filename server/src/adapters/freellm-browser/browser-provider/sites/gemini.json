@@ -52,8 +52,7 @@
   ],
   "modelMenu": [
     "button[data-test-id='bard-mode-menu-button']",
-    "button[aria-label*='mode picker']",
-    "button:has-text('Gemini')"
+    "button[aria-label*='mode picker']"
   ],
   "modelOptions": {
     "gemini-flash-lite": {

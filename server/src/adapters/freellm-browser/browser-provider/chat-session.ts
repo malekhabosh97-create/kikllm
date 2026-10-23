@@ -210,8 +210,56 @@ export class PlaywrightChatSession implements ChatSession {
     if (fileInputMatch) {
       this.matchedSelectors["fileInput"] = fileInputMatch.selector;
       await fileInputMatch.element.setInputFiles(files);
-      await this.page.waitForTimeout(1500);
+      await this.page.waitForTimeout(1000);
       await this.page.keyboard.press("Escape").catch(() => {});
+
+      // Check if composer was disabled by Gemini due to missing login
+      const isDisabled = await this.page.evaluate(() => {
+        const editor = document.querySelector("rich-textarea");
+        return (
+          editor?.classList.contains("ql-disabled") ||
+          editor?.querySelector("[contenteditable='false']") !== null
+        );
+      });
+
+      if (isDisabled) {
+        throw new Error(
+          "File attachment rejected by Gemini: composer is disabled (ql-disabled). Gemini requires being signed in to a Google account to attach files.",
+        );
+      }
+
+      // Verify that attachment chip appears in DOM within composer before proceeding
+      for (const filePath of files) {
+        const baseName = path.basename(filePath);
+        let chipFound = false;
+        const chipStart = Date.now();
+        while (Date.now() - chipStart < 10000) {
+          chipFound = await this.page.evaluate((targetName) => {
+            const composer = document.querySelector("rich-textarea, .chat-composer, form, .input-area");
+            if (!composer) return false;
+            const elements = Array.from(composer.querySelectorAll("*"));
+            return elements.some((el) => {
+              const text = (el as HTMLElement).innerText || "";
+              const aria = el.getAttribute("aria-label") || "";
+              return (
+                (text.includes(targetName) || aria.includes(targetName)) &&
+                (el as HTMLElement).offsetParent !== null &&
+                el.tagName !== "INPUT" &&
+                el.tagName !== "SCRIPT"
+              );
+            });
+          }, baseName);
+
+          if (chipFound) break;
+          await this.page.waitForTimeout(500);
+        }
+
+        if (!chipFound) {
+          throw new Error(
+            `Attachment chip verification failed: '${baseName}' was not rendered in the chat composer within 10s.`,
+          );
+        }
+      }
       return;
     }
 

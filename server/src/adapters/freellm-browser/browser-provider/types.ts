@@ -65,10 +65,18 @@ export interface SiteHealth {
   isLoggedIn?: boolean;
 }
 
+export interface LiveModelInfo {
+  id: string;
+  label: string;
+  description?: string;
+  locked: boolean;
+  rawText?: string;
+}
+
 export interface SiteAdapter {
   readonly id: string;
   health(): Promise<SiteHealth>;
-  listModels(): Promise<string[]>;
+  listModels(): Promise<LiveModelInfo[]>;
   newChat(modelId?: string): Promise<ChatSession>;
   shutdown(): Promise<void>;
 }
