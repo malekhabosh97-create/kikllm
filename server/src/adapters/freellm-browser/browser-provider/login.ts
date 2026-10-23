@@ -45,45 +45,40 @@ async function runLogin(siteName: string) {
   await page.goto(config.url, { waitUntil: "domcontentloaded", timeout: 45000 });
   await page.waitForTimeout(2000);
 
-  // Check if sign-in button is present
-  const signinBtn = await page.$('button:has-text("Sign in"), a:has-text("Sign in")');
-  if (signinBtn) {
-    console.log(`[LOGIN] Opening Google Sign-in screen...`);
-    await signinBtn.click().catch(() => {});
-    await page.waitForTimeout(1500);
-  }
-
   let isBlocked = false;
   let isDone = false;
 
-  // Background blocker monitor: checks if Google blocks login
+  // Background blocker monitor: checks all open tabs if Google blocks login
   const monitorTimer = setInterval(async () => {
-    if (isDone || isBlocked || page.isClosed()) return;
+    if (isDone || isBlocked) return;
     try {
-      const currentUrl = page.url();
-      const bodyText = await page.evaluate(() => document.body?.innerText || "").catch(() => "");
+      const activePages = context.pages().filter((p) => !p.isClosed());
+      for (const p of activePages) {
+        const currentUrl = p.url();
+        const bodyText = await p.evaluate(() => document.body?.innerText || "").catch(() => "");
 
-      if (
-        bodyText.includes("This browser or app may not be secure") ||
-        bodyText.includes("Couldn't sign you in") ||
-        currentUrl.includes("/rejected")
-      ) {
-        isBlocked = true;
-        clearInterval(monitorTimer);
+        if (
+          bodyText.includes("This browser or app may not be secure") ||
+          bodyText.includes("Couldn't sign you in") ||
+          currentUrl.includes("/rejected")
+        ) {
+          isBlocked = true;
+          clearInterval(monitorTimer);
 
-        console.error(`\n[LOGIN] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
-        console.error(`[LOGIN] STOP: Google blocked sign-in in this automated browser instance!`);
-        console.error(`[LOGIN] Message detected: "This browser or app may not be secure"`);
-        console.error(`[LOGIN] Per instruction: Stopping immediately with zero evasion.`);
-        console.error(`[LOGIN] Recommendation: Switch provider to DeepSeek.`);
-        console.error(`[LOGIN] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
+          console.error(`\n[LOGIN] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
+          console.error(`[LOGIN] STOP: Google blocked sign-in in this automated browser instance!`);
+          console.error(`[LOGIN] Message detected: "This browser or app may not be secure"`);
+          console.error(`[LOGIN] Per instruction: Stopping immediately with zero evasion.`);
+          console.error(`[LOGIN] Recommendation: Switch provider to DeepSeek.`);
+          console.error(`[LOGIN] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
 
-        const blockedScreenshot = path.join(calibrationDir, "login-blocked.png");
-        await page.screenshot({ path: blockedScreenshot, fullPage: true }).catch(() => {});
-        console.log(`[LOGIN] Saved blocker screenshot to: ${blockedScreenshot}`);
+          const blockedScreenshot = path.join(calibrationDir, "login-blocked.png");
+          await p.screenshot({ path: blockedScreenshot, fullPage: true }).catch(() => {});
+          console.log(`[LOGIN] Saved blocker screenshot to: ${blockedScreenshot}`);
 
-        await adapter.shutdown();
-        process.exit(2);
+          await adapter.shutdown();
+          process.exit(2);
+        }
       }
     } catch {}
   }, 1500);
