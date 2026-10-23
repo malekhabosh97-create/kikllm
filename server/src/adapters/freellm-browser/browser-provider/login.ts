@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { GeminiSiteAdapter, DEFAULT_GEMINI_PROFILE_DIR, loadGeminiConfig } from "./gemini-adapter.js";
+import { DeepSeekSiteAdapter, DEFAULT_DEEPSEEK_PROFILE_DIR, loadDeepSeekConfig } from "./deepseek-adapter.js";
 
 async function promptEnter(promptText: string): Promise<void> {
   const rl = readline.createInterface({
@@ -27,15 +28,23 @@ async function runLogin(siteName: string) {
     fs.mkdirSync(calibrationDir, { recursive: true });
   }
 
-  const config = loadGeminiConfig();
-  console.log(`[LOGIN] Target Profile Dir: ${DEFAULT_GEMINI_PROFILE_DIR}`);
+  const isDeepSeek = siteName.toLowerCase().includes("deepseek");
+  const config = isDeepSeek ? loadDeepSeekConfig() : loadGeminiConfig();
+  const profileDir = isDeepSeek ? DEFAULT_DEEPSEEK_PROFILE_DIR : DEFAULT_GEMINI_PROFILE_DIR;
+  console.log(`[LOGIN] Target Profile Dir: ${profileDir}`);
   console.log(`[LOGIN] Launching headed Chrome...`);
 
-  const adapter = new GeminiSiteAdapter({
-    config,
-    profileDir: DEFAULT_GEMINI_PROFILE_DIR,
-    headless: false,
-  });
+  const adapter = isDeepSeek
+    ? new DeepSeekSiteAdapter({
+        config,
+        profileDir,
+        headless: false,
+      })
+    : new GeminiSiteAdapter({
+        config,
+        profileDir,
+        headless: false,
+      });
 
   const context = await (adapter as any).getContext();
   const pages = context.pages();
@@ -52,7 +61,7 @@ async function runLogin(siteName: string) {
   const monitorTimer = setInterval(async () => {
     if (isDone || isBlocked) return;
     try {
-      const activePages = context.pages().filter((p) => !p.isClosed());
+      const activePages = context.pages().filter((p: any) => !p.isClosed());
       for (const p of activePages) {
         const currentUrl = p.url();
         const bodyText = await p.evaluate(() => document.body?.innerText || "").catch(() => "");

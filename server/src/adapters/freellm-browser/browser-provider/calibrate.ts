@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { GeminiSiteAdapter, DEFAULT_GEMINI_PROFILE_DIR, loadGeminiConfig } from "./gemini-adapter.js";
+import { DeepSeekSiteAdapter, DEFAULT_DEEPSEEK_PROFILE_DIR, loadDeepSeekConfig } from "./deepseek-adapter.js";
 import type { ReplyResult, LiveModelInfo } from "./types.js";
 
 type StepStatus = "PASS" | "FAIL" | "SKIPPED";
@@ -35,15 +36,23 @@ async function runCalibration(siteName: string) {
     "utf8",
   );
 
-  const config = loadGeminiConfig();
-  console.log(`[CALIBRATE] Profile dir: ${DEFAULT_GEMINI_PROFILE_DIR}`);
+  const isDeepSeek = siteName.toLowerCase().includes("deepseek");
+  const config = isDeepSeek ? loadDeepSeekConfig() : loadGeminiConfig();
+  const profileDir = isDeepSeek ? DEFAULT_DEEPSEEK_PROFILE_DIR : DEFAULT_GEMINI_PROFILE_DIR;
+  console.log(`[CALIBRATE] Profile dir: ${profileDir}`);
   console.log(`[CALIBRATE] Config loaded: ${config.name} (${config.url})`);
 
-  const adapter = new GeminiSiteAdapter({
-    config,
-    profileDir: DEFAULT_GEMINI_PROFILE_DIR,
-    headless: false,
-  });
+  const adapter = isDeepSeek
+    ? new DeepSeekSiteAdapter({
+        config,
+        profileDir,
+        headless: false,
+      })
+    : new GeminiSiteAdapter({
+        config,
+        profileDir,
+        headless: false,
+      });
 
   const steps: Record<string, StepResult> = {};
   const recordStep = (name: string, status: StepStatus, details: string, evidence?: any) => {
@@ -158,7 +167,11 @@ async function runCalibration(siteName: string) {
     // -------------------------------------------------------------
     console.log(`\n--- Step 4: Model Selection & Verification ---`);
     // Determine which model to test based on what live UI actually showed
-    const targetModelKey = isAuthenticated ? "gemini-flash" : "gemini-flash-lite";
+    const targetModelKey = isDeepSeek
+      ? "deepseek-chat"
+      : isAuthenticated
+      ? "gemini-flash"
+      : "gemini-flash-lite";
     let session: any;
     try {
       session = await adapter.newChat(targetModelKey);

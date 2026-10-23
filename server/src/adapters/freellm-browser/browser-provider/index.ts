@@ -2,9 +2,12 @@ export * from "./types.js";
 export * from "./site-adapter.js";
 export * from "./chat-session.js";
 export * from "./gemini-adapter.js";
+export * from "./deepseek-adapter.js";
+export * from "./model-router.js";
 
 import type { SiteAdapter } from "./types.js";
 import { GeminiSiteAdapter } from "./gemini-adapter.js";
+import { DeepSeekSiteAdapter } from "./deepseek-adapter.js";
 
 const adapters = new Map<string, SiteAdapter>();
 
@@ -16,6 +19,12 @@ export function getSiteAdapter(siteId: string): SiteAdapter {
 
   if (normalized === "gemini") {
     const adapter = new GeminiSiteAdapter();
+    adapters.set(normalized, adapter);
+    return adapter;
+  }
+
+  if (normalized === "deepseek") {
+    const adapter = new DeepSeekSiteAdapter();
     adapters.set(normalized, adapter);
     return adapter;
   }

@@ -1,0 +1,97 @@
+{
+  "id": "deepseek",
+  "name": "DeepSeek",
+  "url": "https://chat.deepseek.com",
+  "newChatUrl": "https://chat.deepseek.com",
+  "loginIndicators": [
+    "button:has-text('Log in')",
+    "button:has-text('Sign in')",
+    "a[href*='login']",
+    "div:has-text('Log in')"
+  ],
+  "chatInput": [
+    "textarea#chat-input",
+    "textarea[placeholder*='DeepSeek']",
+    "textarea"
+  ],
+  "sendButton": [
+    "div[role='button']:has([class*='send'])",
+    "button[aria-label*='Send']",
+    ".ds-icon-button:has-text('Send')",
+    "div.f6d670",
+    "button:has-text('Send')"
+  ],
+  "stopButton": [
+    "button[aria-label*='Stop']",
+    ".ds-icon--stop",
+    "button:has-text('Stop')",
+    "div[role='button']:has([class*='stop'])"
+  ],
+  "lastMessage": [
+    ".ds-markdown",
+    ".fbb737a4",
+    ".chat-message-content",
+    "[data-message-author-role='assistant']"
+  ],
+  "messageText": [
+    ".ds-markdown",
+    "p",
+    ".chat-message-content"
+  ],
+  "attachButton": [
+    "button[aria-label*='Attach']",
+    "button[aria-label*='Upload']",
+    "input[type='file']",
+    ".ds-icon--paperclip"
+  ],
+  "fileInput": [
+    "input[type='file']"
+  ],
+  "modelMenu": [
+    "button:has-text('DeepThink')",
+    "div:has-text('DeepThink')",
+    "[aria-label*='DeepThink']"
+  ],
+  "modelOptions": {
+    "deepseek-chat": {
+      "label": "DeepSeek-V3",
+      "selector": "div:has-text('DeepThink')"
+    },
+    "deepseek-reasoner": {
+      "label": "DeepSeek-R1",
+      "selector": "div:has-text('DeepThink')"
+    }
+  },
+  "blockers": [
+    {
+      "type": "login_blocked",
+      "selector": "text=Log in to continue",
+      "textPattern": "Log in to continue|Please sign in"
+    },
+    {
+      "type": "login",
+      "selector": "button:has-text('Log in'), a[href*='login']",
+      "urlPattern": "chat\\.deepseek\\.com/sign_in|chat\\.deepseek\\.com/login"
+    },
+    {
+      "type": "captcha",
+      "selector": "#challenge-running, #challenge-stage, .cf-turnstile, iframe[src*='challenges.cloudflare']",
+      "textPattern": "challenge|turnstile|verify you are human|Cloudflare"
+    },
+    {
+      "type": "rate_limit",
+      "selector": ".rate-limit, :has-text('Too many requests')",
+      "textPattern": "Too many requests|rate limit|busy|please try again later"
+    },
+    {
+      "type": "quota_exhausted",
+      "selector": ".quota-exceeded",
+      "textPattern": "daily limit|quota exceeded"
+    }
+  ],
+  "completion": {
+    "stabilityMs": 2500,
+    "pollIntervalMs": 500,
+    "maxTimeoutMs": 300000
+  }
+}
