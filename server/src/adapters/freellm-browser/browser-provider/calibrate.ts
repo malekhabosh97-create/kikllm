@@ -80,10 +80,14 @@ async function runCalibration(siteName: string) {
     screenshots.push(initialScreenshot);
 
     const hasSignInBtn = await page.evaluate(() => {
-      const elements = Array.from(document.querySelectorAll("button, a"));
+      const isLoginUrl = window.location.href.includes("/sign_in") || window.location.href.includes("/login");
+      if (isLoginUrl) return true;
+
+      const elements = Array.from(document.querySelectorAll("button, a, div"));
       return elements.some(
         (el) =>
-          (el as HTMLElement).innerText?.trim() === "Sign in" &&
+          ((el as HTMLElement).innerText?.trim() === "Sign in" ||
+            (el as HTMLElement).innerText?.trim() === "Log in") &&
           (el as HTMLElement).offsetParent !== null,
       );
     });
