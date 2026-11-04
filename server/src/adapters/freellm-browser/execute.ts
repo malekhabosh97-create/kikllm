@@ -30,7 +30,7 @@ export async function execute(context:AdapterExecutionContext):Promise<AdapterEx
   });
   if(result.fullResponse)await context.onLog("stdout","\n"+result.fullResponse+"\n");
   const cancelled=result.lastStatus==="cancelled";
-  const success=["completed","waiting_children","waiting_review"].includes(result.lastStatus);
+  const success=["completed","waiting_children","waiting_review","waiting_input"].includes(result.lastStatus);
   return {exitCode:cancelled?130:success?0:1,signal:cancelled?"SIGINT":null,timedOut:false,
     errorMessage:success?undefined:result.errorMessage||result.lastStatus,
     summary:result.fullResponse.slice(0,500),resultJson:{freellmStatus:result.lastStatus,verified:result.verified,toolCalls:result.toolCallsCount},

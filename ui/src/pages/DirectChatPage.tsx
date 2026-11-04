@@ -18,7 +18,7 @@ type Message={id:string;sender:string;text:string;timestamp?:string};
 type Step={id:string;tool:string;result?:string};
 type Binding={projectId:string;workspaceId:string;cwd:string;issueId?:string};
 const providers=[["gemini-default","جيمناي — الوضع الحالي"],["deepseek-chat","ديب سيك — العادي"],["deepseek-reasoner","ديب سيك — التفكير"],["chatgpt-default","شات جي بي تي"],["claude-default","كلود"],["qwen-default","كوين"],["grok-default","غروك"],["glm-default","جي إل إم"],["arena-default","أرينا"]];
-const statuses:Record<string,string>={running:"يعمل الآن",completed:"اكتمل",blocked:"يحتاج معالجة",failed:"تعذر التنفيذ",waiting_children:"ينتظر الفريق",waiting_review:"ينتظر المراجعة",cancelled:"أُلغي",limit_reached:"بلغ حد الخطوات"};
+const statuses:Record<string,string>={running:"يعمل الآن",completed:"اكتمل",blocked:"يحتاج معالجة",failed:"تعذر التنفيذ",waiting_children:"ينتظر الفريق",waiting_review:"ينتظر المراجعة",waiting_input:"ينتظر إجابتك",cancelled:"أُلغي",limit_reached:"بلغ حد الخطوات"};
 export function DirectChatPage(){
   const {selectedCompanyId}=useCompany();
   const [agents,setAgents]=useState<Agent[]>([]),[agentId,setAgentId]=useState("");

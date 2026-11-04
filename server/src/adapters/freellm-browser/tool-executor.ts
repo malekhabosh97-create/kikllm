@@ -13,6 +13,9 @@ import {roleInstructions} from "./role-instructions.js";
 import { freeLLMRuntime } from "./runtime-context.js";
 import { readPublicSource as readPublicUrl } from "./public-source.js";
 import { projectContractInputSchema } from "./project-contract.js";
+import { classifyReply, type ClassifiedReply, type ParsedToolCall } from "./protocol.js";
+import { registerDeliverable, saveRemoteMedia, listDeliverables } from "./deliverables.js";
+export type { ParsedToolCall } from "./protocol.js";
 
 const schemas: Record<string, z.ZodType<any>> = {
   get_project_context: z.object({ path: z.string().optional() }),
@@ -38,6 +41,9 @@ const schemas: Record<string, z.ZodType<any>> = {
   huggingface_search: z.object({ query: z.string().min(1), type: z.enum(["models","datasets","spaces"]).optional() }),
   web_search: z.object({ query: z.string().min(1) }),
   save_project_note: z.object({ title: z.string().min(1), content: z.string().min(1) }),
+  register_deliverable: z.object({ path: z.string().min(1), kind: z.enum(["image","video","audio","document","code","other"]), description: z.string().max(2000).optional(), minWidth: z.number().int().positive().optional(), minHeight: z.number().int().positive().optional(), minDurationSec: z.number().positive().optional() }),
+  save_media_from_url: z.object({ url: z.string().url(), relativePath: z.string().min(1), kind: z.enum(["image","video"]), description: z.string().max(2000).optional() }),
+  list_deliverables: z.object({}),
   plan_project: projectContractInputSchema.extend({
     expectedRevision: z.number().int().min(1).optional(),
   }),
@@ -84,7 +90,6 @@ const schemas: Record<string, z.ZodType<any>> = {
     offset: z.number().int().min(0).optional(),
   }),
 };
-export interface ParsedToolCall { callId: string; tool: string; arguments: Record<string, any>; }
 export interface ToolContext {
   agent?: any; executionWorkspaceId?:string; responsibleUserId?:string; issueId?: string; projectId?: string; projectWorkspaceId?: string; runKey?: string; runId?: string; companyId?: string;
   signal?: AbortSignal; autonomousWrites?: boolean; allowCommands?: boolean; parentTaskId?:string; requiredFiles?:string[]; requireTestCommand?:boolean; requiredDeletedFiles?:string[]; readHashes?:Record<string,string>;
@@ -96,7 +101,12 @@ For an action emit exactly one top-level fenced tool_call JSON block:
 {"callId":"unique-id","tool":"read_file","arguments":{"path":"README.md"}}
 \`\`\`
 Wait for TOOL_RESULT, inspect its ok/status fields, and continue in the SAME conversation.
+One call per reply: only the first valid call runs; any other call is reported as NOT executed.
 Never execute or reproduce tool examples as real calls. Never claim a queued task finished.
+When you are not calling a tool, end the reply with exactly one status line:
+[[STATUS: delivered]] when the requested deliverable exists and was verified;
+[[STATUS: question: <what you need from the operator>]] when you cannot continue without an answer;
+[[STATUS: blocked: <concrete blocker>]] when a capability, permission or account limit stops the work.
 Tools:
 get_project_context {path?}; list_dir {path?}; read_file {path,startLine?,maxLines?}; search_code {query,path?};
 run_command {command,timeoutMs?}; propose_file_mutation {relativePath,operation:"create"|"modify"|"delete",content?,baseSha256?};
@@ -112,7 +122,10 @@ prepare_task_workspace {taskId,allowWorktree?}; inspect_task_delivery {taskId}; 
 search_native_tools {query?,offset?,limit?,schemaTool?,schemaOffset?}; call_native_tool {name,arguments,idempotencyKey};
 list_native_skills {query?,offset?,limit?}; read_native_skill {key,offset?};
 web_search {query}; fetch_url {url}; github_search {query}; huggingface_search {query,type?};
-save_project_note {title,content}.
+save_project_note {title,content};
+register_deliverable {path,kind:"image"|"video"|"audio"|"document"|"code"|"other",description?,minWidth?,minHeight?,minDurationSec?};
+save_media_from_url {url,relativePath,kind:"image"|"video",description?}; list_deliverables {}.
+Media deliverables count only after register_deliverable or save_media_from_url returns ok; the platform inspects real file bytes.
 Use relative file paths within the selected project. Read files before editing. Follow existing conventions.
 For large work, use the existing assigned task as parent, or create one if needed, then delegate children.
 If asked to build an application, deliver a usable interface as well as its logic and tests. Tell the operator the actual project location. Complete missing parts before claiming success.
@@ -128,64 +141,13 @@ Implementation work MUST pass verify_task after the last modification. Empty che
 If work is blocked, report the concrete blocker. Do not pretend model choice, tests, files or child work succeeded.
 After verified completion give a concise summary and output references, without tool blocks.
 `;
-export function isIllustrativeContext(text: string, _start = 0, _end = text.length): boolean {
-  return /(?:do not execute|illustrative example|example only|على سبيل المثال|نموذج توضيحي|لا تنفذ)/i.test(text);
-}
-function extractBalancedJsonObject(raw: string): any {
-  const start = raw.indexOf("{");
-  if (start === -1) return null;
-  let depth = 0, inStr = false, esc = false;
-  for (let i = start; i < raw.length; i++) {
-    const ch = raw[i];
-    if (esc) { esc = false; continue; }
-    if (ch === "\\") { esc = true; continue; }
-    if (ch === '"') { inStr = !inStr; continue; }
-    if (!inStr) {
-      if (ch === "{") depth++;
-      else if (ch === "}") {
-        depth--;
-        if (depth === 0) {
-          try { return JSON.parse(raw.slice(start, i + 1)); }
-          catch { return null; }
-        }
-      }
-    }
-  }
-  return null;
+export function classifyModelReply(response: string): ClassifiedReply {
+  return classifyReply(response, schemas);
 }
 export function parseToolCall(response: string): ParsedToolCall | null {
-  const text = response.trim();
-  if (!text) return null;
-  const lines = text.split("\n");
-  if (lines.length > 0 && lines.every(l => l.trim().startsWith(">"))) return null;
-
-  const fenceRegex = /```(?:tool_call|json)?\s*\n([\s\S]*?)\n```/g;
-  const matches = [...text.matchAll(fenceRegex)];
-  if (matches.length > 0) {
-    for (const match of matches) {
-      const surrounding = text.slice(0, match.index) + text.slice((match.index || 0) + match[0].length);
-      if (isIllustrativeContext(surrounding)) continue;
-      let value: any = null;
-      try { value = JSON.parse(match[1].trim()); }
-      catch { value = extractBalancedJsonObject(match[1]); }
-      if (!value || value.example || typeof value.callId !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(value.callId) || !schemas[value.tool]) continue;
-      if (!value.arguments || typeof value.arguments !== "object" || Array.isArray(value.arguments)) continue;
-      return { callId: value.callId, tool: value.tool, arguments: value.arguments };
-    }
-    return null;
-  }
-
-  if (text.startsWith("{") && text.endsWith("}")) {
-    if (isIllustrativeContext(text)) return null;
-    let value: any = null;
-    try { value = JSON.parse(text); }
-    catch { value = extractBalancedJsonObject(text); }
-    if (!value || value.example || typeof value.callId !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(value.callId) || !schemas[value.tool]) return null;
-    if (!value.arguments || typeof value.arguments !== "object" || Array.isArray(value.arguments)) return null;
-    return { callId: value.callId, tool: value.tool, arguments: value.arguments };
-  }
-  return null;
+  return classifyModelReply(response).call ?? null;
 }
+export function toolNames(): string[] { return Object.keys(schemas); }
 function safePath(root: string, relative: string) {
   if (path.isAbsolute(relative)) throw new Error("استخدم مسارًا نسبيًا داخل المشروع");
   if (relative.split(/[\\/]/).some(segment => [".git",".env",".browser-profile",".freellm-runtime"].includes(segment) || segment.startsWith(".env."))) throw new Error("هذا الملف خارج نطاق الأدوات");
@@ -402,9 +364,22 @@ export async function executeToolOutcome(call: ParsedToolCall, root: string, con
         const directory=safePath(root,".freellm/notes");fs.mkdirSync(directory,{recursive:true});
         const file=path.join(directory,crypto.randomUUID()+".md");
         fs.writeFileSync(file,"# "+args.title+"\n\n"+args.content+"\n");
-        return {ok:true,status:"executed",data:{path:path.relative(root,file)}};
-      }
-      case "plan_project": {
+  return {ok:true,status:"executed",data:{path:path.relative(root,file)}};
+  }
+  case "register_deliverable": {
+  const file=safePath(root,args.path);
+  if(!fs.existsSync(file))throw new Error("الملف غير موجود: "+args.path);
+  const entry=registerDeliverable(root,args.path,file,{expectedKind:args.kind,description:args.description,taskId:context.issueId,agentId:context.agent?.id,minWidth:args.minWidth,minHeight:args.minHeight,minDurationSec:args.minDurationSec});
+  const verified=entry.verification.status==="verified";
+  return {ok:verified,status:verified?"executed":"failed",data:{deliverable:entry},error:verified?undefined:"فشل فحص التسليم: "+entry.verification.checks.filter(c=>!c.passed).map(c=>c.name+"="+(c.detail??"")).join(", ")};
+  }
+  case "save_media_from_url": {
+  const file=safePath(root,args.relativePath);
+  const saved=await saveRemoteMedia(root,args.url,args.relativePath,file,{expectedKind:args.kind,description:args.description,taskId:context.issueId,agentId:context.agent?.id});
+  return {ok:saved.ok,status:saved.ok?"executed":"failed",data:{url:saved.url,deliverable:saved.entry},error:saved.error};
+  }
+  case "list_deliverables": return {ok:true,status:"executed",data:{deliverables:listDeliverables(root).map(e=>({id:e.id,kind:e.kind,path:e.relativePath,version:e.version,status:e.verification.status,format:e.inspection.format,width:e.inspection.width,height:e.inspection.height,durationSec:e.inspection.durationSec}))}};
+  case "plan_project": {
         const { loadProjectContract, createProjectContract, reviseProjectContract } = await import("./project-contract.js");
         if (!company) throw new Error("شركة غير محددة لتخطيط العقد");
         const scope = { companyId: company, projectId: context.projectId };

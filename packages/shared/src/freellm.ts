@@ -1,4 +1,4 @@
-export type FreeLLMRunStatus = "running" | "completed" | "waiting_review" | "waiting_children" | "blocked" | "failed" | "cancelled" | "limit_reached";
+export type FreeLLMRunStatus = "running" | "completed" | "waiting_review" | "waiting_children" | "waiting_input" | "blocked" | "failed" | "cancelled" | "limit_reached";
 export interface FreeLLMToolOutcome {
   ok: boolean;
   status: "executed" | "failed" | "pending_approval" | "unknown";
