@@ -141,7 +141,7 @@ export function approvalService(db: Db) {
         .returning()
         .then((rows) => rows[0] ?? null);
       if (updated && updated.type === "file_mutation") {
-        cleanupFileMutationApproval(updated.payload);
+        await cleanupFileMutationApproval(db, updated.companyId, updated.payload);
       }
       return updated;
     },
@@ -254,7 +254,7 @@ export function approvalService(db: Db) {
         }
 
         if (applied && updated.type === "file_mutation") {
-          cleanupFileMutationApproval(updated.payload);
+          await cleanupFileMutationApproval(db, updated.companyId, updated.payload);
         }
 
         return { approval: updated, applied };

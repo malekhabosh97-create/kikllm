@@ -553,6 +553,19 @@ export async function terminateLocalService(
   const signal = opts?.signal ?? "SIGTERM";
   const targetProcessGroup = process.platform !== "win32" && record.processGroupId && record.processGroupId > 0;
 
+
+  // Retain a proven child listener before the shell exits; Windows does not
+  // propagate process.kill() to the Node process started by cmd/PowerShell.
+  const listenerBeforeStop=process.platform==="win32"&&record.port?await readLocalServicePortOwner(record.port):null;
+  const ownedListener=listenerBeforeStop&&await isLocalServiceProcessOwnedBy(listenerBeforeStop,record.pid)?listenerBeforeStop:null;
+  const terminateWindowsTree=async(force:boolean)=>{
+    const flags=force?["/F"]:[];
+    await execFileAsync("taskkill.exe",["/PID",String(record.pid),"/T",...flags],{windowsHide:true,timeout:5000}).catch(()=>{});
+    if(force&&ownedListener&&isPidAlive(ownedListener)&&await isLocalServiceProcessOwnedBy(ownedListener,record.pid)){
+      await execFileAsync("taskkill.exe",["/PID",String(ownedListener),"/T","/F"],{windowsHide:true,timeout:5000}).catch(()=>{});
+    }
+  };
+
   const targetIsGone = async () => {
     const targetAlive = targetProcessGroup
       ? isProcessGroupAlive(record.processGroupId)
@@ -575,7 +588,8 @@ export async function terminateLocalService(
   };
 
   try {
-    if (targetProcessGroup) {
+    if(process.platform==="win32"){await terminateWindowsTree(signal==="SIGKILL");}
+    else if (targetProcessGroup) {
       process.kill(-record.processGroupId!, signal);
     } else {
       process.kill(record.pid, signal);
@@ -586,7 +600,8 @@ export async function terminateLocalService(
 
   if (await waitUntilGone(opts?.forceAfterMs ?? 2_000)) return;
   try {
-    if (targetProcessGroup) {
+    if(process.platform==="win32"){await terminateWindowsTree(true);}
+    else if (targetProcessGroup) {
       process.kill(-record.processGroupId!, "SIGKILL");
     } else {
       process.kill(record.pid, "SIGKILL");

@@ -1,0 +1,12 @@
+const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
+const root=path.resolve(__dirname,"../..");
+const folder=path.join(process.env.LOCALAPPDATA,"Programs","FreeLLM Work","resources","app");
+const pkg=JSON.parse(fs.readFileSync(path.join(folder,"package.json"),"utf8"));
+if(pkg.name!=="@paperclipai/desktop"||pkg.main!=="main.cjs")throw new Error("The installed launcher does not match this application");
+const main=path.join(folder,"main.cjs"),original=fs.readFileSync(main);
+const backup=main+".before-"+Date.now();
+fs.writeFileSync(backup,original,{flag:"wx"});
+fs.writeFileSync(main,"process.env.FREELLM_REPO_ROOT ||= "+JSON.stringify(root)+";\nrequire(process.env.FREELLM_REPO_ROOT + '/packages/desktop/main.cjs');\n");
+fs.mkdirSync(path.join(root,".freellm-runtime"),{recursive:true});
+fs.writeFileSync(path.join(root,".freellm-runtime","installed-launcher-backup.json"),JSON.stringify({installed:main,backup,sha256:crypto.createHash("sha256").update(original).digest("hex"),linkedRoot:root},null,2));
+console.log("Installed launcher linked to the verified workspace. Original launcher backed up.");

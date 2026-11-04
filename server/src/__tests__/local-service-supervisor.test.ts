@@ -7,6 +7,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   resetRuntimeServicesForTests,
+  resolveShell,
   startRuntimeServicesForWorkspaceControl,
 } from "../services/workspace-runtime.js";
 import {
@@ -31,13 +32,13 @@ describe("local service supervision", () => {
     process.env.PAPERCLIP_HOME = paperclipHome;
     process.env.PAPERCLIP_INSTANCE_ID = `service-stdio-${randomUUID()}`;
 
-    // The managed service uses a login shell, whose PATH can select a different
-    // Node installation from the one CI configured for this test process.
-    // Git Bash accepts Windows drive paths with forward slashes.
+    // Use the test runtime explicitly, with quoting for the native platform shell.
     const nodeExecutable = process.platform === "win32"
       ? process.execPath.replace(/\\/g, "/")
       : process.execPath;
-    const nodeCommand = "'" + nodeExecutable.replace(/'/g, "'\\''") + "'";
+    const nodeCommand = process.platform === "win32"
+      ? (/^(?:powershell|pwsh)(?:\.exe)?$/i.test(path.basename(resolveShell())) ? "& " : "") + '"' + nodeExecutable + '"'
+      : "'" + nodeExecutable.replace(/'/g, "'\\''") + "'";
     let registryRecord: Awaited<ReturnType<typeof listLocalServiceRegistryRecords>>[number] | null = null;
     try {
       const [service] = await startRuntimeServicesForWorkspaceControl({

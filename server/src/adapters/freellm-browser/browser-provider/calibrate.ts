@@ -47,11 +47,13 @@ async function runCalibration(siteName: string) {
         config,
         profileDir,
         headless: false,
+        embedded: false,
       })
     : new GeminiSiteAdapter({
         config,
         profileDir,
         headless: false,
+        embedded: false,
       });
 
   const steps: Record<string, StepResult> = {};

@@ -204,18 +204,19 @@
         <span class="badge badge-running" id="badge-server"><span class="dot"></span> جاري الفحص</span>
       </div>
       <div class="status-item">
-        <span>وسيط المتصفح الذكي (Browser Daemon 3150):</span>
-        <span class="badge badge-pending" id="badge-daemon"><span class="dot"></span> قيد الانتظار</span>
+        <span>المتصفح المدمج:</span>
+        <span class="badge badge-pending" id="badge-daemon"><span class="dot"></span> متاح</span>
       </div>
       <div class="status-item">
-        <span>محرك متصفح النماذج (Chrome CDP 9222):</span>
-        <span class="badge badge-pending" id="badge-chrome"><span class="dot"></span> قيد الانتظار</span>
+        <span>جلسات الحسابات:</span>
+        <span class="badge badge-pending" id="badge-chrome"><span class="dot"></span> تفتح عند الحاجة</span>
       </div>
     </div>
   </div>
 
   <script>
-    // Exposed API from preload if available
+    window.electronAPI?.onStatusUpdate(data=>{if(data.status)document.getElementById("status-message").textContent=data.status;});
+    // Local startup status
     window.addEventListener('message', (event) => {
       const data = event.data;
       if (!data) return;

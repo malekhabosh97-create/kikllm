@@ -1,856 +1,212 @@
-import React, { useState, useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useEffect, useRef, useState } from "react";
+import { Bot, FolderOpen, Send, Square, Plus, RefreshCw, Globe, FileText, ListTodo, Monitor } from "lucide-react";
+import type { FreeLLMTurnEvent, ProjectWorkspace, WorkspaceFileContent } from "@paperclipai/shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { MarkdownBody } from "@/components/MarkdownBody";
+import { WorkspaceFileBrowser } from "@/components/WorkspaceFileBrowser";
+import { HtmlArtifactPreview } from "@/components/HtmlArtifactPreview";
+import { WorkspaceRuntimeControls, buildWorkspaceRuntimeControlSections, type WorkspaceRuntimeControlRequest } from "@/components/WorkspaceRuntimeControls";
 import { useCompany } from "@/context/CompanyContext";
-import {
-  Send,
-  Square,
-  Sparkles,
-  Bot,
-  User,
-  PlusCircle,
-  Trash2,
-  ExternalLink,
-  Crown,
-  CheckCircle2,
-  Copy,
-  Check,
-  AlertCircle,
-  RefreshCw,
-  Layers,
-  Zap,
-  FolderGit2,
-} from "lucide-react";
-
-interface Agent {
-  id: string;
-  name: string;
-  role: string;
-  title?: string;
-  adapterConfig?: { model?: string };
-  avatarUrl?: string;
-}
-
-interface ChatMessage {
-  id: string;
-  sender: "user" | "agent";
-  text: string;
-  timestamp: string;
-  actionProposal?: {
-    action: "create_agent";
-    name: string;
-    role: string;
-    title?: string;
-    model?: string;
-    systemPrompt?: string;
-  } | null;
-  createdAgentId?: string;
-}
-
-export function DirectChatPage() {
-  const { selectedCompanyId } = useCompany();
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputPrompt, setInputPrompt] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [browserStatus, setBrowserStatus] = useState<any>({ deepseek: "CHECKING", gemini: "CHECKING" });
-  const [isCreatingAgent, setIsCreatingAgent] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [workspaceRoot, setWorkspaceRoot] = useState<string>("C:\\Users\\malek\\Documents\\freellm work");
-
-  // New agent form state
-  const [newAgentForm, setNewAgentForm] = useState({
-    name: "",
-    role: "engineer",
-    title: "",
-    model: "gemini-argon",
-    systemPrompt: "",
-  });
-
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // 1. Fetch Agents List
-  const fetchAgents = async () => {
-    if (!selectedCompanyId) return;
-    try {
-      const res = await fetch(`/api/companies/${selectedCompanyId}/agents`);
-      if (res.ok) {
-        const data = await res.json();
-        setAgents(data);
-        if (!selectedAgentId && data.length > 0) {
-          // Default to CEO agent if available, otherwise first agent
-          const ceo = data.find((a: Agent) => a.role === "ceo" || a.name.includes("CEO"));
-          setSelectedAgentId(ceo ? ceo.id : data[0].id);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to fetch agents", e);
-    }
-  };
-
-  // 2. Fetch Browser Status
-  const fetchBrowserStatus = async () => {
-    try {
-      const res = await fetch("/api/browser/status");
-      if (res.ok) {
-        const data = await res.json();
-        setBrowserStatus(data);
-      }
-    } catch {
-      setBrowserStatus({ deepseek: "DISCONNECTED", gemini: "DISCONNECTED" });
-    }
-  };
-
-  useEffect(() => {
-    fetchAgents();
-    fetchBrowserStatus();
-    const timer = setInterval(fetchBrowserStatus, 5000);
-    return () => clearInterval(timer);
-  }, [selectedCompanyId]);
-
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-
-  // 3. Load Chat History from Paperclip Central Database when agent changes
-  useEffect(() => {
-    if (!selectedAgentId) {
-      setMessages([]);
-      return;
-    }
-    let isCancelled = false;
-    setIsLoadingHistory(true);
-    fetch(`/api/browser/agent-chat/history?agentId=${selectedAgentId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load history");
-        return res.json();
-      })
-      .then((data) => {
-        if (!isCancelled && Array.isArray(data.messages)) {
-          setMessages(data.messages);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load agent chat history:", err);
-      })
-      .finally(() => {
-        if (!isCancelled) setIsLoadingHistory(false);
-      });
-
-    return () => {
-      isCancelled = true;
+import { projectsApi } from "@/api/projects";
+import { fileResourcesApi } from "@/api/file-resources";
+import { freeLLMRequest, readFreeLLMStream } from "@/lib/freellm";
+import { Link } from "@/lib/router";
+type Agent={id:string;name:string;role:string;title?:string;adapterConfig?:{model?:string}};
+type Message={id:string;sender:string;text:string;timestamp?:string};
+type Step={id:string;tool:string;result?:string};
+type Binding={projectId:string;workspaceId:string;cwd:string;issueId?:string};
+const providers=[["gemini-default","جيمناي — الوضع الحالي"],["deepseek-chat","ديب سيك — العادي"],["deepseek-reasoner","ديب سيك — التفكير"],["chatgpt-default","شات جي بي تي"],["claude-default","كلود"],["qwen-default","كوين"],["grok-default","غروك"],["glm-default","جي إل إم"],["arena-default","أرينا"]];
+const statuses:Record<string,string>={running:"يعمل الآن",completed:"اكتمل",blocked:"يحتاج معالجة",failed:"تعذر التنفيذ",waiting_children:"ينتظر الفريق",waiting_review:"ينتظر المراجعة",cancelled:"أُلغي",limit_reached:"بلغ حد الخطوات"};
+export function DirectChatPage(){
+  const {selectedCompanyId}=useCompany();
+  const [agents,setAgents]=useState<Agent[]>([]),[agentId,setAgentId]=useState("");
+  const [messages,setMessages]=useState<Message[]>([]),[prompt,setPrompt]=useState(""),[error,setError]=useState("");
+  const [cwd,setCwd]=useState(""),[binding,setBinding]=useState<Binding|null>(null),[issueId,setIssueId]=useState("");
+  const [busy,setBusy]=useState(false),[runId,setRunId]=useState(""),[status,setStatus]=useState(""),[steps,setSteps]=useState<Step[]>([]);
+  const [tab,setTab]=useState<"files"|"preview"|"tasks"|"team">("files"),[file,setFile]=useState<WorkspaceFileContent|null>(null),[filePath,setFilePath]=useState("");
+  const [workspace,setWorkspace]=useState<ProjectWorkspace|null>(null),[tasks,setTasks]=useState<any[]>([]);
+  const [previewUrl,setPreviewUrl]=useState(""),[newAgent,setNewAgent]=useState(false),[name,setName]=useState(""),[role,setRole]=useState("engineer"),[model,setModel]=useState("gemini-default"),[instructions,setInstructions]=useState("");
+  const [intent,setIntent]=useState("auto"),[command,setCommand]=useState(""),[port,setPort]=useState("5173");
+  const streamRef=useRef<AbortController|null>(null),selectedRef=useRef(agentId),tail=useRef<HTMLDivElement>(null);
+  selectedRef.current=agentId;
+  async function loadAgents(){
+    if(!selectedCompanyId)return;
+    const response=await fetch("/api/companies/"+selectedCompanyId+"/agents");if(!response.ok)throw new Error("تعذر قراءة الفريق");
+    const rows:Agent[]=await response.json();setAgents(rows);setAgentId(previous=>rows.some(a=>a.id===previous)?previous:rows.find(a=>a.role==="ceo")?.id||rows[0]?.id||"");
+  }
+  async function refreshWorkspace(){
+    if(!binding||!selectedCompanyId)return;
+    const rows=await projectsApi.listWorkspaces(binding.projectId,selectedCompanyId);const current=rows.find(w=>w.id===binding.workspaceId)||null;setWorkspace(current);
+    const service=current?.runtimeServices?.find(s=>s.status==="running"&&s.url);
+    if(service?.url)setPreviewUrl(previous=>previous||service.url!);
+  }
+  async function refreshTasks(){if(!selectedCompanyId)return;const response=await fetch("/api/companies/"+selectedCompanyId+"/issues");if(response.ok)setTasks((await response.json()).filter((task:any)=>!binding||task.projectId===binding.projectId));}
+  useEffect(()=>{let saved:Binding|null=null;try{saved=JSON.parse(localStorage.getItem("freellm-project:"+selectedCompanyId)||"null");}catch{}setBinding(saved);setCwd(saved?.cwd||"");setWorkspace(null);setMessages([]);setIssueId("");void loadAgents().catch(reason=>setError(reason.message));},[selectedCompanyId]);
+  useEffect(()=>{
+    streamRef.current?.abort();setBusy(false);setSteps([]);setStatus("");setFile(null);
+    if(!agentId)return;
+    let disposed=false;
+    freeLLMRequest<any>("/agent-chat/history?agentId="+agentId).then(history=>{
+      if(disposed)return;setMessages(history.messages);setIssueId(history.issueId||"");
+      if(history.activeRuns?.[0])void resumeStream(history.activeRuns[0],agentId);
+    }).catch(reason=>setError(reason.message));
+    return()=>{disposed=true;streamRef.current?.abort();};
+  },[agentId]);
+  useEffect(()=>{void refreshWorkspace().catch(reason=>setError(reason.message));void refreshTasks();const timer=setInterval(()=>{void refreshWorkspace().catch(()=>{});void refreshTasks();},8000);return()=>clearInterval(timer);},[binding,selectedCompanyId]);
+  useEffect(()=>{tail.current?.scrollIntoView({block:"nearest"});},[messages,steps]);
+  function handleEvents(targetAgent:string,assistantId:string){
+    let text="";
+    return(event:FreeLLMTurnEvent)=>{
+      if(selectedRef.current!==targetAgent)return;
+      if(event.issueId)setIssueId(event.issueId);
+      if(event.runId)setRunId(event.runId);
+      if(event.type==="token"){text+=event.text||"";setMessages(previous=>previous.map(message=>message.id===assistantId?{...message,text:text.split("```tool_call")[0]}:message));}
+      if(event.type==="replace"){text=event.text||"";setMessages(previous=>previous.map(message=>message.id===assistantId?{...message,text:text.split("```tool_call")[0]}:message));}
+      if(event.type==="tool_call"){setSteps(previous=>[...previous,{id:event.callId!,tool:event.tool!}]);}
+      if(event.type==="tool_result"){setSteps(previous=>previous.map(step=>step.id===event.callId?{...step,result:event.result}:step));text="";void loadAgents();void refreshTasks();}
+      if(event.type==="status"){setStatus(event.status||"");if(event.status==="blocked"&&event.message)setError("مطلوب تدخل داخل المتصفح: "+event.message);else if(event.status==="running")setError("");}
+      if(event.type==="error")setError(event.message||"تعذر التنفيذ");
     };
-  }, [selectedAgentId]);
-
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId);
-  const activeModel = selectedAgent?.adapterConfig?.model || "gemini-argon";
-  const activePlatform = activeModel.startsWith("gemini") ? "gemini" : "deepseek";
-  const isPlatformReady =
-    activePlatform === "gemini" ? browserStatus.gemini === "READY" : browserStatus.deepseek === "READY";
-
-  // Parse Action proposal from text
-  const parseActionProposal = (text: string) => {
-    try {
-      const match = text.match(/```(?:json)?\s*(\{[\s\S]*?"action"\s*:\s*"create_agent"[\s\S]*?\})\s*```/);
-      let parsed = match && match[1] ? JSON.parse(match[1]) : null;
-      if (!parsed) {
-        const rawMatch = text.match(/\{[\s\S]*?"action"\s*:\s*"create_agent"[\s\S]*?\}/);
-        if (rawMatch) parsed = JSON.parse(rawMatch[0]);
+  }
+  async function resumeStream(id:string,targetAgent:string){
+    setRunId(id);setBusy(true);setStatus("running");
+    const assistantId="resume-"+id;setMessages(previous=>[...previous,{id:assistantId,sender:"agent",text:""}]);
+    const controller=new AbortController();streamRef.current=controller;
+    try{await readFreeLLMStream(await fetch("/api/browser/runs/"+id+"/events",{signal:controller.signal}),handleEvents(targetAgent,assistantId));}
+    catch(reason){if((reason as Error).name!=="AbortError")setError((reason as Error).message);}
+    finally{if(selectedRef.current===targetAgent)setBusy(false);}
+  }
+  async function connectFolder(){
+    setError("");
+    try{
+      const selected=window.freellmDesktop?await window.freellmDesktop.selectFolder():cwd;
+      const target=selected||cwd||"C:\\Users\\malek\\Documents\\FreeLLM Projects";
+      setCwd(target);
+      const result=await freeLLMRequest<Binding>("/workspace/connect",{companyId:selectedCompanyId,cwd:target,agentId:agentId||undefined});
+      setBinding(result);localStorage.setItem("freellm-project:"+selectedCompanyId,JSON.stringify(result));if(result.issueId)setIssueId(result.issueId);
+    }catch(reason){setError((reason as Error).message);}
+  }
+  async function send(){
+    if(!prompt.trim()||!agentId||busy)return;
+    setError("");setSteps([]);
+    try{
+      let current=binding;
+      if(!current){
+        const target=cwd.trim()||"C:\\Users\\malek\\Documents\\FreeLLM Projects";
+        current=await freeLLMRequest<Binding>("/workspace/connect",{companyId:selectedCompanyId,cwd:target,agentId});
+        setBinding(current);setCwd(target);
       }
-      if (parsed) {
-        if (parsed.agent) {
-          return {
-            action: "create_agent",
-            name: parsed.agent.name || "Specialist Agent",
-            role: parsed.agent.role || "engineer",
-            title: parsed.agent.role || parsed.agent.name,
-            model: parsed.agent.model || "gemini-argon",
-            systemPrompt: parsed.agent.system_prompt || parsed.agent.description || "",
-          };
-        }
-        return parsed;
-      }
-    } catch {
-      // ignore parse errors
-    }
-    return null;
-  };
+      const requestId=crypto.randomUUID(),assistantId="reply-"+requestId,text=prompt.trim(),target=agentId;
+      setMessages(previous=>[...previous,{id:"user-"+requestId,sender:"user",text},{id:assistantId,sender:"agent",text:""}]);
+      setPrompt("");setRunId(requestId);setBusy(true);setStatus("running");
+      const controller=new AbortController();streamRef.current=controller;
+      await readFreeLLMStream(await fetch("/api/browser/agent-chat",{method:"POST",headers:{"content-type":"application/json"},signal:controller.signal,
+        body:JSON.stringify({agentId:target,prompt:text,workspaceRoot:current.cwd,projectId:current.projectId,requestId,intent})}),handleEvents(target,assistantId));
+      void refreshWorkspace();void refreshTasks();
+    }catch(reason){if((reason as Error).name!=="AbortError")setError((reason as Error).message);}
+    finally{if(streamRef.current?.signal.aborted!==true)setBusy(false);}
+  }
+  async function stop(){try{await freeLLMRequest("/runs/"+runId+"/cancel",{});}catch(reason){setError((reason as Error).message);}}
 
-  // 4. Send Message (Verbatim Transmission)
-  const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend !== undefined ? textToSend : inputPrompt).trim();
-    if (!text || isStreaming || !selectedAgentId) return;
+  async function changeModel(next:string){
+    try{await freeLLMRequest("/agents/"+agentId+"/model",{model:next});await loadAgents();}catch(reason){setError((reason as Error).message);}
+  }
+  async function createAgent(){
+    try{
+      await freeLLMRequest("/create-agent",{companyId:selectedCompanyId,name,role,model,systemPrompt:instructions.trim()||undefined});
+      setNewAgent(false);setName("");setInstructions("");await loadAgents();
+    }catch(reason){setError((reason as Error).message);}
+  }
+  async function openFile(reference:any){
+    if(!issueId)return;
+    try{setFilePath(reference.path);setFile(await fileResourcesApi.content(issueId,reference));}catch(reason){setError((reason as Error).message);}
+  }
+  async function runtimeAction(request:WorkspaceRuntimeControlRequest){
+    if(!binding||!selectedCompanyId)return;
+    try{await projectsApi.controlWorkspaceCommands(binding.projectId,binding.workspaceId,request.action,selectedCompanyId,request);await refreshWorkspace();}
+    catch(reason){setError((reason as Error).message);}
+  }
+  async function configurePreview(){
+    if(!binding||!selectedCompanyId||!command.trim())return;
+    try{
 
-    setInputPrompt("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
+      const current=workspace?.runtimeConfig;
+      const previous=Array.isArray((current?.workspaceRuntime as any)?.services)?(current?.workspaceRuntime as any).services:[];
+      const services=previous.filter((v:any)=>v.id!=="freellm-preview"&&!["FreeLLM Preview","معاينة المشروع"].includes(v.name));
+      services.push({id:"freellm-preview",name:"FreeLLM Preview",command,port:Number(port),readiness:{type:"http",urlTemplate:"http://127.0.0.1:{{port}}",timeoutSec:30,intervalMs:250},expose:{type:"url",urlTemplate:"http://127.0.0.1:{{port}}"},lifecycle:"shared"});
+      await projectsApi.updateWorkspace(binding.projectId,binding.workspaceId,{runtimeConfig:{...current,workspaceRuntime:{...(current?.workspaceRuntime as any),services}}},selectedCompanyId);
 
-    const userMessage: ChatMessage = {
-      id: "usr_" + Date.now(),
-      sender: "user",
-      text,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    const agentMessageId = "agt_" + Date.now();
-    const placeholderAgentMessage: ChatMessage = {
-      id: agentMessageId,
-      sender: "agent",
-      text: "",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    setMessages((prev) => [...prev, userMessage, placeholderAgentMessage]);
-    setIsStreaming(true);
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      const res = await fetch("/api/browser/agent-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agentId: selectedAgentId,
-          prompt: text, // Sent verbatim
-          workspaceRoot,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "فشل الاتصال بالخادم" }));
-        throw new Error(err.error || `Error ${res.status}`);
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("لا يمكن قراءة البث (No stream reader)");
-
-      const decoder = new TextDecoder();
-      let accumulatedText = "";
-
-      let sseBuffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        sseBuffer += decoder.decode(value, { stream: true });
-        const lines = sseBuffer.split("\n");
-        sseBuffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-              if (data.type === "token" && data.text) {
-                accumulatedText += data.text;
-              } else if (data.type === "replace" && data.text) {
-                accumulatedText = data.text;
-              } else if (data.type === "content" && data.content) {
-                accumulatedText += data.content;
-              } else if (data.type === "tool_call") {
-                accumulatedText += `\n\n> ⚡ **[أمر تنفيذي للأداة: \`${data.tool}\`]**\n`;
-              } else if (data.type === "tool_result") {
-                const preview = data.result ? data.result.slice(0, 300) : "";
-                accumulatedText += `> 📋 **[نتيجة الأداة: \`${data.tool}\`]**\n\`\`\`text\n${preview}${data.result && data.result.length > 300 ? "\n..." : ""}\n\`\`\`\n\n`;
-              } else if (data.type === "error") {
-                accumulatedText += `\n\n> [!WARNING]\n> ${data.message || "حدث خطأ أثناء التوليد"}`;
-              }
-            } catch {
-              // ignore parse errors for partial chunks
-            }
-          }
-        }
-
-        // Update the agent message live
-        const proposal = parseActionProposal(accumulatedText);
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === agentMessageId ? { ...msg, text: accumulatedText, actionProposal: proposal } : msg
-          )
-        );
-      }
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === agentMessageId
-              ? {
-                  ...msg,
-                  text:
-                    msg.text ||
-                    `⚠️ تعذر استلام الرد: ${err.message}.\nيرجى التأكد من أن المتصفح يعمل وأن التبويب مسجل الدخول إليه.`,
-                }
-              : msg
-          )
-        );
-      }
-    } finally {
-      setIsStreaming(false);
-      abortControllerRef.current = null;
-    }
-  };
-
-  const handleStopStreaming = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setIsStreaming(false);
-    }
-  };
-
-  const handleClearHistory = async () => {
-    if (confirm("هل أنت متأكد من مسح سجل المحادثة مع هذا الإيجنت؟")) {
-      setMessages([]);
-      if (selectedAgentId) {
-        await fetch(`/api/browser/agent-chat/history?agentId=${selectedAgentId}`, {
-          method: "DELETE",
-        }).catch(() => {});
-      }
-    }
-  };
-
-  // 5. Execute Agent Creation from CEO Action Proposal
-  const handleExecuteAgentCreation = async (
-    msgId: string,
-    proposal: {
-      action: "create_agent";
-      name: string;
-      role: string;
-      title?: string;
-      model?: string;
-      systemPrompt?: string;
-    }
-  ) => {
-    setIsCreatingAgent(true);
-    try {
-      const res = await fetch("/api/browser/create-agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyId: selectedCompanyId,
-          name: proposal.name,
-          role: proposal.role || "engineer",
-          title: proposal.title || proposal.name,
-          model: proposal.model || "gemini-argon",
-          systemPrompt: proposal.systemPrompt || "",
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "فشل إنشاء الإيجنت" }));
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
-
-      const created = await res.json();
-      await fetchAgents();
-
-      // Mark this proposal as created
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msgId ? { ...m, createdAgentId: created.id } : m))
-      );
-
-      alert(`تم إنشاء الإيجنت "${created.name}" بنجاح في النظام! 🎉`);
-    } catch (e: any) {
-      alert("حدث خطأ أثناء إنشاء الإيجنت: " + e.message);
-    } finally {
-      setIsCreatingAgent(false);
-    }
-  };
-
-  // 6. Manual Agent Creation Modal Submit
-  const handleManualCreateAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAgentForm.name.trim()) return;
-
-    setIsCreatingAgent(true);
-    try {
-      const res = await fetch("/api/browser/create-agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyId: selectedCompanyId,
-          name: newAgentForm.name,
-          role: newAgentForm.role,
-          title: newAgentForm.title || `${newAgentForm.name} (${newAgentForm.role.toUpperCase()})`,
-          model: newAgentForm.model,
-          systemPrompt: newAgentForm.systemPrompt,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "فشل إنشاء الإيجنت" }));
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
-
-      const created = await res.json();
-      await fetchAgents();
-      setSelectedAgentId(created.id);
-      setShowCreateModal(false);
-      setNewAgentForm({ name: "", role: "engineer", title: "", model: "gemini-argon", systemPrompt: "" });
-      alert(`تم إنشاء الإيجنت "${created.name}" بنجاح! تم نقلك للمحادثة معه.`);
-    } catch (e: any) {
-      alert("فشل إنشاء الإيجنت: " + e.message);
-    } finally {
-      setIsCreatingAgent(false);
-    }
-  };
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const handleBringBrowserToFront = async () => {
-    try {
-      await fetch("/api/browser/tab/open", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform: activePlatform }),
-      });
-    } catch (e: any) {
-      alert("تعذر فتح التبويب: " + e.message);
-    }
-  };
-
-  return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-6xl mx-auto p-4 gap-4">
-      {/* Top Header & Agent Picker */}
-      <header className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg shadow-inner">
-              {selectedAgent?.role === "ceo" ? <Crown className="w-6 h-6 text-amber-400" /> : <Bot className="w-6 h-6" />}
-            </div>
-            <span
-              className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-card ${
-                isPlatformReady ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
-              }`}
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <label htmlFor="agent-select" className="text-xs text-muted-foreground font-semibold">
-                الإيجنت المتحدث:
-              </label>
-              <select
-                id="agent-select"
-                value={selectedAgentId}
-                onChange={(e) => setSelectedAgentId(e.target.value)}
-                className="bg-background border border-border text-foreground font-semibold text-sm rounded-md px-2.5 py-1 focus:outline-hidden focus:ring-1 focus:ring-primary cursor-pointer"
-              >
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} ({a.role.toUpperCase()}) - {a.adapterConfig?.model || "FreeLLM"}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-muted-foreground">{selectedAgent?.title || "AI Agent"}</span>
-              <Badge variant="outline" className="text-[11px] py-0 px-1.5 border-primary/30 text-primary">
-                {activeModel}
-              </Badge>
-              <Badge
-                variant="outline"
-                className={`text-[11px] py-0 px-1.5 ${
-                  isPlatformReady
-                    ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
-                    : "border-amber-500/40 text-amber-400 bg-amber-500/10"
-                }`}
-              >
-                {isPlatformReady ? "متصل بالمتصفح الحي" : "غير متصل / يحتاج فحص"}
-              </Badge>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border/80 bg-background/50 text-xs">
-            <FolderGit2 className="w-3.5 h-3.5 text-primary shrink-0" />
-            <span className="text-[11px] font-medium text-muted-foreground shrink-0">مجلد المشروع:</span>
-            <input
-              type="text"
-              value={workspaceRoot}
-              onChange={(e) => setWorkspaceRoot(e.target.value)}
-              className="bg-transparent border-0 text-foreground font-mono text-[11px] focus:outline-none w-56 md:w-64"
-              placeholder="C:\path\to\project"
-              title="المسار الذي ستعمل عليه أدوات الإيجنت (read_file, list_dir, run_command, verify_task)"
-            />
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleBringBrowserToFront}
-            className="text-xs gap-1.5 border-border hover:bg-muted"
-            title="إظهار صفحة الموديل الحية في المتصفح"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-primary" />
-            <span>عرض التبويب</span>
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowCreateModal(true)}
-            className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>+ إضافة إيجنت</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClearHistory}
-            className="text-xs text-muted-foreground hover:text-destructive"
-            title="مسح سجل المحادثة الحالي"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Chat Thread */}
-      <main className="flex-1 overflow-y-auto rounded-xl border border-border bg-card/50 p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4 max-w-lg mx-auto">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
-              {selectedAgent?.role === "ceo" ? <Crown className="w-8 h-8 text-amber-400" /> : <Bot className="w-8 h-8" />}
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-foreground">
-                محادثة مباشرة مع {selectedAgent?.name || "الإيجنت"}
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {selectedAgent?.role === "ceo"
-                  ? "أنا المدير التنفيذي (CEO) لشركة FreeLLM Work بموديل Gemini 4 Argon. مهمتي قيادة الشركة، فحص المشاريع، صناعة الإيجنتات، وتنسيق وتنفيذ واختبار المهام بأدوات حقيقية."
-                  : "أنا جاهز لمساعدتك وتنفيذ طلباتك مباشرة عبر المتصفح وبشكل حرفي متدفق مع تشغيل الأدوات."}
-              </p>
-            </div>
-
-            {selectedAgent?.role === "ceo" && (
-              <div className="w-full flex flex-col gap-2 pt-2">
-                <span className="text-xs text-muted-foreground font-medium text-right">أوامر قيادية وتنفيذية مقترحة:</span>
-                <button
-                  onClick={() => handleSendMessage("افحص المشروع في مسار العمل، واقترح خطة مناسبة، ووزّع العمل على فريق الإيجنتات، ونفّذ واختبر النتيجة بأدلة حقيقية.")}
-                  className="text-xs text-right p-2.5 rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors text-foreground flex items-center justify-between font-medium"
-                >
-                  <span>🎯 افحص المشروع، واقترح خطة، ووزّع العمل، ونفّذ واختبر النتيجة</span>
-                  <Zap className="w-3.5 h-3.5 text-primary" />
-                </button>
-                <button
-                  onClick={() => handleSendMessage("افحص الملفات في مجلد المشروع عبر get_project_context واعرض لي تقريراً معمارياً موجزاً")}
-                  className="text-xs text-right p-2.5 rounded-lg border border-border/80 bg-background/50 hover:bg-primary/10 hover:border-primary/40 transition-colors text-foreground flex items-center justify-between"
-                >
-                  <span>🔍 افحص الملفات واعرض تقريراً معمارياً موجزاً عن المشروع</span>
-                  <Zap className="w-3.5 h-3.5 text-primary" />
-                </button>
-                <button
-                  onClick={() => handleSendMessage("اصنع لي إيجنت مطور برمجيات كامل (Fullstack Engineer) بموديل ديب سيك")}
-                  className="text-xs text-right p-2.5 rounded-lg border border-border/80 bg-background/50 hover:bg-primary/10 hover:border-primary/40 transition-colors text-foreground flex items-center justify-between"
-                >
-                  <span>🚀 اصنع لي إيجنت مطور برمجيات كامل (Fullstack) بموديل ديب سيك</span>
-                  <Zap className="w-3.5 h-3.5 text-primary" />
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3 max-w-4xl ${msg.sender === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}
-            >
-              <div
-                className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-xs font-bold ${
-                  msg.sender === "user"
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "bg-muted border border-border text-foreground"
-                }`}
-              >
-                {msg.sender === "user" ? (
-                  <User className="w-4 h-4" />
-                ) : selectedAgent?.role === "ceo" ? (
-                  <Crown className="w-4 h-4 text-amber-400" />
-                ) : (
-                  <Bot className="w-4 h-4 text-primary" />
-                )}
-              </div>
-
-              <div
-                className={`flex flex-col gap-1.5 ${
-                  msg.sender === "user" ? "items-end max-w-[85%]" : "items-start max-w-[90%]"
-                }`}
-              >
-                <div className="flex items-center gap-2 px-1">
-                  <span className="text-xs font-semibold text-foreground/80">
-                    {msg.sender === "user" ? "أنت" : selectedAgent?.name || "الوكيل"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">{msg.timestamp}</span>
-                </div>
-
-                <div
-                  className={`rounded-2xl p-4 text-sm leading-relaxed shadow-xs relative group ${
-                    msg.sender === "user"
-                      ? "bg-primary text-primary-foreground rounded-tr-xs"
-                      : "bg-card border border-border text-card-foreground rounded-tl-xs"
-                  }`}
-                >
-                  {msg.sender === "agent" && (
-                    <button
-                      onClick={() => copyToClipboard(msg.text, msg.id)}
-                      className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 p-1.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-                      title="نسخ النص"
-                    >
-                      {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  )}
-
-                  <div className="markdown-body prose dark:prose-invert max-w-none text-sm break-words">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text || "..."}</ReactMarkdown>
-                  </div>
-
-                  {/* Executive Action Card (if CEO proposes creating an agent) */}
-                  {msg.actionProposal && msg.actionProposal.action === "create_agent" && (
-                    <div className="mt-4 p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
-                          <Zap className="w-4 h-4" />
-                          <span>اقتراح تنفيذي لإنشاء إيجنت جديد</span>
-                        </div>
-                        <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
-                          {msg.actionProposal.model || "gemini-argon"}
-                        </Badge>
-                      </div>
-
-                      <div className="text-xs space-y-1 text-foreground/90 bg-background/60 p-2.5 rounded-lg border border-border">
-                        <div>
-                          <strong>الاسم:</strong> {msg.actionProposal.name}
-                        </div>
-                        <div>
-                          <strong>الدور:</strong> {msg.actionProposal.role} ({msg.actionProposal.title || "محدد"})
-                        </div>
-                        {msg.actionProposal.systemPrompt && (
-                          <div className="text-[11px] text-muted-foreground line-clamp-2">
-                            <strong>التعليمات:</strong> {msg.actionProposal.systemPrompt}
-                          </div>
-                        )}
-                      </div>
-
-                      {msg.createdAgentId ? (
-                        <div className="flex items-center justify-between text-xs text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/30">
-                          <span className="flex items-center gap-1.5 font-medium">
-                            <CheckCircle2 className="w-4 h-4" />
-                            تم إنشاء هذا الإيجنت بنجاح في النظام!
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs border-emerald-500/40 text-emerald-400"
-                            onClick={() => setSelectedAgentId(msg.createdAgentId!)}
-                          >
-                            التبديل إليه الآن
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          disabled={isCreatingAgent}
-                          onClick={() => handleExecuteAgentCreation(msg.id, msg.actionProposal!)}
-                          className="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold gap-1.5 shadow-sm"
-                        >
-                          <PlusCircle className="w-4 h-4" />
-                          {isCreatingAgent ? "جاري إنشاء الإيجنت..." : "اعتماد وإنشاء الإيجنت الآن"}
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </main>
-
-      {/* Input Bar */}
-      <footer className="relative flex flex-col gap-2 p-2 rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex items-end gap-2">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={inputPrompt}
-            onChange={(e) => {
-              setInputPrompt(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            placeholder={`اكتب رسالتك إلى ${selectedAgent?.name || "الوكيل"} هنا... (Shift+Enter لسطر جديد)`}
-            className="flex-1 bg-transparent border-0 resize-none p-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden max-h-44 min-h-[44px]"
-          />
-
-          {isStreaming ? (
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={handleStopStreaming}
-              className="h-10 px-3.5 gap-1.5 font-medium shrink-0"
-            >
-              <Square className="w-4 h-4 fill-current" />
-              <span>إيقاف</span>
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              disabled={!inputPrompt.trim() || !selectedAgentId}
-              onClick={() => handleSendMessage()}
-              className="h-10 px-4 gap-1.5 font-semibold shrink-0 shadow-xs"
-            >
-              <span>إرسال</span>
-              <Send className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between px-2 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
-            يتم نقل النص حرفياً للمتصفح الحي واستلام الرد المتدفق عبر محرك FreeLLM
-          </span>
-          <span>{inputPrompt.length} حرف</span>
-        </div>
-      </footer>
-
-      {/* Create Agent Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <PlusCircle className="w-5 h-5 text-primary" />
-                <span>إضافة إيجنت جديد للشركة</span>
-              </h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-muted-foreground hover:text-foreground text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleManualCreateAgent} className="space-y-3.5">
-              <div>
-                <label className="text-xs font-semibold text-foreground">اسم الإيجنت *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="مثال: Senior Python Developer"
-                  value={newAgentForm.name}
-                  onChange={(e) => setNewAgentForm({ ...newAgentForm, name: e.target.value })}
-                  className="w-full mt-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-hidden"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-foreground">الدور (Role)</label>
-                  <select
-                    value={newAgentForm.role}
-                    onChange={(e) => setNewAgentForm({ ...newAgentForm, role: e.target.value })}
-                    className="w-full mt-1 bg-background border border-border rounded-lg px-2.5 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-hidden"
-                  >
-                    <option value="engineer">مهندس (Engineer)</option>
-                    <option value="cto">CTO</option>
-                    <option value="cmo">CMO</option>
-                    <option value="cfo">CFO</option>
-                    <option value="general">عام (General)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-foreground">الموديل المخصص</label>
-                  <select
-                    value={newAgentForm.model}
-                    onChange={(e) => setNewAgentForm({ ...newAgentForm, model: e.target.value })}
-                    className="w-full mt-1 bg-background border border-border rounded-lg px-2.5 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-hidden"
-                  >
-                    <option value="gemini-argon">Gemini 4 Argon</option>
-                    <option value="gemini-pro">Gemini 3.1 Pro</option>
-                    <option value="gemini-flash">Gemini 3.8 Flash</option>
-                    <option value="deepseek-normal">DeepSeek V3 (Normal)</option>
-                    <option value="deepseek-thinking">DeepSeek R1 (Thinking)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-foreground">المسمى الوظيفي (Title)</label>
-                <input
-                  type="text"
-                  placeholder="مثال: مطور الذكاء الاصطناعي والتطبيقات"
-                  value={newAgentForm.title}
-                  onChange={(e) => setNewAgentForm({ ...newAgentForm, title: e.target.value })}
-                  className="w-full mt-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-foreground">التعليمات والتوجيهات (System Prompt)</label>
-                <textarea
-                  rows={3}
-                  placeholder="حدد دور الإيجنت واختصاصه وكيف ينجز المهام..."
-                  value={newAgentForm.systemPrompt}
-                  onChange={(e) => setNewAgentForm({ ...newAgentForm, systemPrompt: e.target.value })}
-                  className="w-full mt-1 bg-background border border-border rounded-lg p-2.5 text-xs text-foreground focus:ring-1 focus:ring-primary focus:outline-hidden resize-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCreateModal(false)}
-                  className="text-xs"
-                >
-                  إلغاء
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={isCreatingAgent || !newAgentForm.name.trim()}
-                  className="text-xs font-semibold"
-                >
-                  {isCreatingAgent ? "جاري الإنشاء..." : "إنشاء الإيجنت الآن"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      await refreshWorkspace();
+    }catch(reason){setError((reason as Error).message);}
+  }
+  const sections=buildWorkspaceRuntimeControlSections({runtimeConfig:workspace?.runtimeConfig?.workspaceRuntime,runtimeServices:workspace?.runtimeServices,canStartServices:true});
+  const isLocalPreview=(()=>{try{const url=new URL(previewUrl);return ["http:","https:"].includes(url.protocol)&&["127.0.0.1","localhost"].includes(url.hostname)&&url.port!==window.location.port;}catch{return false;}})();
+  return <div className="freellm-workbench flex min-h-0 flex-col gap-3 p-4" dir="rtl">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div><h1 className="text-xl font-semibold">مساحة الفريق</h1><p className="text-sm text-muted-foreground">اشرح الهدف؛ يعرض المدير خطة مختصرة ثم يبدأ العمل.</p></div>
+      <div className="flex items-center gap-2"><Badge variant="outline">{statuses[status]||"جاهز لاستقبال مهمة"}</Badge><Link to="/browser"><Button variant="outline" size="sm"><Globe className="size-4"/>المتصفح</Button></Link></div>
     </div>
-  );
+    <div className="flex flex-wrap items-center gap-2">
+      <select aria-label="الوكيل" className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={agentId} disabled={busy} onChange={event=>setAgentId(event.target.value)}>
+        {agents.map(agent=><option key={agent.id} value={agent.id}>{agent.name} · {agent.role}</option>)}
+      </select>
+      <Button variant="outline" size="sm" onClick={()=>setNewAgent(!newAgent)}><Plus className="size-4"/>مختص جديد</Button>
+      <Input aria-label="مجلد المشروع" className="min-w-0 flex-1 font-mono" dir="ltr" placeholder="اختر مجلد المشروع" value={cwd} disabled={busy} onChange={event=>{setCwd(event.target.value);setBinding(null);}}/>
+      <Button variant="outline" onClick={()=>void connectFolder()} disabled={busy||!selectedCompanyId}><FolderOpen className="size-4"/>ربط المشروع</Button>
+
+      {agentId&&<select aria-label="منصة الوكيل" className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={agents.find(agent=>agent.id===agentId)?.adapterConfig?.model||"gemini-default"} disabled={busy} onChange={event=>void changeModel(event.target.value)}>
+        {!providers.some(([id])=>id===agents.find(agent=>agent.id===agentId)?.adapterConfig?.model)&&<option value={agents.find(agent=>agent.id===agentId)?.adapterConfig?.model}>اختر وضعًا متاحًا للحساب</option>}
+        {providers.map(([value,label])=><option key={value} value={value}>{label}</option>)}
+      </select>}
+    </div>
+    {newAgent&&<div className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-2">
+      <Input aria-label="اسم المختص" placeholder="اسم المختص" value={name} onChange={event=>setName(event.target.value)}/>
+      <select aria-label="دور المختص" className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={role} onChange={event=>setRole(event.target.value)}>{[["ceo","مدير"],["cto","مدير تقني"],["engineer","مطور"],["qa","مختبر ومراجع"],["researcher","باحث"],["designer","مصمم"],["cmo","تسويق"],["general","مختص"]].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>
+      <select aria-label="نموذج المختص" className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={model} onChange={event=>setModel(event.target.value)}>{providers.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>
+      <Input aria-label="تعليمات المختص" placeholder="تعليمات إضافية اختيارية؛ يُجهز الدور تلقائيًا" value={instructions} onChange={event=>setInstructions(event.target.value)}/>
+      <div className="flex justify-between md:col-span-2"><Button variant="ghost" onClick={()=>setNewAgent(false)}>إلغاء</Button><Button onClick={()=>void createAgent()} disabled={!name||(instructions.length>0&&instructions.length<20)}>إنشاء المختص</Button></div>
+    </div>}
+    {error&&<div role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">{error}</div>}
+    <div className="freellm-workbench-columns grid min-h-0 flex-1 gap-3">
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border">
+        <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
+          {messages.length===0&&<div className="space-y-3 py-6 text-muted-foreground"><Bot className="size-8"/><p>اختر مشروعًا، ثم اشرح ما تريد إنجازه. الملفات والمهام والنتائج تبقى مرتبطة بمشروعك.</p></div>}
+          {messages.map(message=><div key={message.id} className="space-y-2"><div className="text-xs font-medium text-muted-foreground">{message.sender==="user"?"أنت":"الفريق"}</div><MarkdownBody>{message.text}</MarkdownBody></div>)}
+          {steps.length>0&&<div className="space-y-2 rounded-lg bg-muted/30 p-3">{steps.map(step=><details key={step.id}><summary className="cursor-pointer text-sm">{step.result?(JSON.parse(step.result).ok?"✓":"×"):"…"} {({read_file:"قراءة ملف",get_project_context:"فهم المشروع",propose_file_mutation:"تعديل ملف",verify_task:"التحقق من التسليم",create_agent:"إنشاء مختص",delegate_task:"تفويض مهمة",create_task:"إنشاء مهمة",run_command:"تشغيل أمر",web_search:"البحث",start_preview:"تشغيل المعاينة",list_agents:"قراءة الفريق"} as Record<string,string>)[step.tool]||step.tool}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs" dir="ltr">{step.result||"قيد التنفيذ"}</pre></details>)}</div>}
+          <div ref={tail}/>
+        </div>
+        <div className="space-y-2 border-t border-border p-3">
+          <textarea aria-label="طلبك للفريق" className="freellm-composer w-full resize-none rounded-md border border-input bg-background p-3 text-sm" value={prompt} disabled={busy} placeholder="ماذا تريد من الفريق أن ينجز؟" onChange={event=>setPrompt(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();void send();}}}/>
+          <div className="flex items-center justify-between gap-2">
+            <select aria-label="نوع الطلب" className="rounded-md border border-input bg-background px-2 py-1 text-xs" value={intent} onChange={event=>setIntent(event.target.value)}><option value="auto">تلقائي</option><option value="work">تنفيذ مشروع</option><option value="research">بحث</option><option value="answer">نقاش</option></select>
+            {busy?<Button variant="outline" onClick={()=>void stop()}><Square className="size-4"/>إيقاف التشغيل</Button>:<Button onClick={()=>void send()} disabled={!agentId||!prompt.trim()}><Send className="size-4"/>إرسال</Button>}
+          </div>
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border">
+        <div className="flex flex-wrap gap-1 border-b border-border p-2">
+          {([["files","الملفات",FileText],["preview","المعاينة",Monitor],["tasks","المهام",ListTodo],["team","الفريق",Bot]] as const).map(([value,label,Icon])=><Button key={value} variant={tab===value?"secondary":"ghost"} size="sm" onClick={()=>setTab(value)}><Icon className="size-4"/>{label}</Button>)}
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-3">
+          {tab==="files"&&(!binding||!issueId?<p className="text-sm text-muted-foreground">اربط مشروعًا لعرض ملفاته.</p>:<div className="space-y-3">
+            <WorkspaceFileBrowser key={binding.workspaceId} issueId={issueId} companyId={selectedCompanyId} initialProjectId={binding.projectId} initialWorkspaceId={binding.workspaceId} onOpen={reference=>void openFile(reference)} selectedPath={filePath} compact autoFocusSearch={false}/>
+            {file&&<div className="space-y-2 border-t border-border pt-3"><div className="flex items-center justify-between"><span className="font-mono text-xs" dir="ltr">{filePath}</span><a className="text-xs text-primary underline" href={fileResourcesApi.downloadUrl(issueId,{path:filePath,projectId:binding.projectId,workspaceId:binding.workspaceId})}>تنزيل</a></div>
+              {file.content.encoding==="utf8"?(filePath.endsWith(".html")?<div className="freellm-file-preview"><HtmlArtifactPreview html={file.content.data} title={filePath}/></div>:<pre className="max-h-96 overflow-auto whitespace-pre-wrap font-mono text-xs" dir="ltr">{file.content.data}</pre>):<p className="text-sm text-muted-foreground">ملف غير نصي؛ استخدم التنزيل أو عارض الملفات الأصلي.</p>}</div>}
+          </div>)}
+          {tab==="preview"&&<div className="space-y-3">
+            {!binding?<p className="text-sm text-muted-foreground">اربط المشروع أولًا.</p>:<>
+              <WorkspaceRuntimeControls sections={sections} onAction={request=>void runtimeAction(request)} serviceEmptyMessage="أضف أمر تشغيل المشروع أدناه." jobEmptyMessage="لا توجد اختبارات أو مهام تشغيل محفوظة."/>
+              <details><summary className="cursor-pointer text-sm">إعداد أمر المعاينة</summary><div className="space-y-2 pt-2"><Input aria-label="أمر المعاينة" dir="ltr" placeholder="npm run dev -- --host 127.0.0.1 --port 5173" value={command} onChange={event=>setCommand(event.target.value)}/><Input aria-label="منفذ المعاينة" dir="ltr" value={port} onChange={event=>setPort(event.target.value)}/><Button variant="outline" onClick={()=>void configurePreview()}>حفظ أمر التشغيل</Button></div></details>
+              <Input aria-label="رابط المعاينة" dir="ltr" placeholder="http://127.0.0.1:5173" value={previewUrl} onChange={event=>setPreviewUrl(event.target.value)}/>
+              {isLocalPreview&&<iframe className="freellm-file-preview w-full rounded-md border border-border" title="معاينة المشروع" src={previewUrl} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerPolicy="no-referrer"/>}
+            </>}
+          </div>}
+          {tab==="tasks"&&<div className="space-y-2"><Button variant="ghost" size="sm" onClick={()=>void refreshTasks()}><RefreshCw className="size-4"/>تحديث المهام</Button>{tasks.map(task=><Link key={task.id} to={"/issues/"+task.id} className="block rounded-md border border-border p-3"><div className="text-sm">{task.title}</div><div className="text-xs text-muted-foreground">{task.status}</div></Link>)}{tasks.length===0&&<p className="text-sm text-muted-foreground">ستظهر هنا المهام التي يوزعها المدير على الفريق.</p>}</div>}
+          {tab==="team"&&<div className="space-y-2">{agents.map(agent=><button key={agent.id} className="block w-full rounded-md border border-border p-3 text-start hover:bg-muted" onClick={()=>setAgentId(agent.id)}><div className="text-sm font-medium">{agent.name}</div><div className="text-xs text-muted-foreground">{agent.role} · {agent.adapterConfig?.model}</div></button>)}</div>}
+        </div>
+      </div>
+    </div>
+  </div>;
 }

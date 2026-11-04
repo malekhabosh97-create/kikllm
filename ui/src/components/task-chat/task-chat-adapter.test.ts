@@ -6,6 +6,15 @@ import {
 } from "./task-chat-adapter";
 
 describe("commentsToTaskChatItems", () => {
+  it("summarizes historical tool audit data while preserving ordinary messages",()=>{
+    const body='أداة propose_file_mutation\n{"callId":"one","ok":true,"data":{"relativePath":"src/app.js","diff":"large source contents"}}';
+    const entries=commentsToTaskChatItems([
+      {id:"tool",body,authorAgentId:"agent-1",authorType:"agent",createdAt:"2026-11-02T00:00:00Z"} as unknown as IssueChatComment,
+      {id:"user",body,authorType:"user",authorUserId:"board",createdAt:"2026-11-02T00:00:01Z"} as unknown as IssueChatComment,
+    ]);
+    expect(entries[0]).toMatchObject({text:"تعديل ملف: تم — src/app.js"});
+    expect(entries[1]).toMatchObject({text:body});
+  });
   it("carries inbound channel attribution into the human bubble", () => {
     expect(commentsToTaskChatItems([{
       id: "photon-comment",

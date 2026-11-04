@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { withGracefulWindowsPostgresStop } from "./embedded-postgres-windows.js";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -122,7 +123,7 @@ async function createEmbeddedPostgresTestInstance(tempDirPrefix: string) {
   // The `start()` rejection carries an empty message, so we capture the output
   // in a bounded buffer and surface it in the thrown error.
   const logBuffer = createEmbeddedPostgresLogBuffer();
-  const instance = new EmbeddedPostgres({
+  const instance = withGracefulWindowsPostgresStop(new EmbeddedPostgres({
     databaseDir: dataDir,
     user: "paperclip",
     password: "paperclip",
@@ -131,7 +132,7 @@ async function createEmbeddedPostgresTestInstance(tempDirPrefix: string) {
     initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"],
     onLog: (message) => logBuffer.append(message),
     onError: (message) => logBuffer.append(message),
-  });
+  }), dataDir);
 
   return { dataDir, port, instance, getRecentLogs: () => logBuffer.getRecentLogs() };
 }
@@ -145,7 +146,7 @@ function cleanupEmbeddedPostgresTestDirs(dataDir: string) {
 const EMBEDDED_POSTGRES_STOP_TIMEOUT_MS = 5000;
 
 // `embedded-postgres@18.1.0-beta.16` exposes only `stop(): Promise<void>` — no
-// shutdown-mode argument. Internally it SIGINTs the postgres process (already
+// shutdown-mode argument. It uses SIGINT (pg_ctl fast shutdown on Windows) for the postgres process (already
 // PostgreSQL "fast shutdown") and resolves *only* on the child's `exit` event,
 // with no time bound of its own. Under the loaded serial server shard a slow
 // shutdown checkpoint can push that past vitest's hookTimeout and hang the
@@ -172,15 +173,14 @@ async function stopEmbeddedPostgresBounded(
   let timer: ReturnType<typeof setTimeout> | undefined;
   const stopped = instance
     .stop()
-    .catch(() => {
-      // Swallow shutdown errors — the data dir is reclaimed regardless.
-    })
-    .finally(() => {
+    .then(() => {
       try {
         cleanupFn?.();
       } catch {
         // Best-effort reclaim; ignore removal errors.
       }
+    }).catch(() => {
+      // Preserve files if shutdown failed: the cluster may still own them.
     });
   try {
     await Promise.race([

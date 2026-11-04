@@ -237,3 +237,5 @@ export { agentCommentary } from "./agent_commentary.js";
 export { agentIdentityKeys } from "./agent_identity_keys.js";
 export * from "./decision_models.js";
 export { userCompanyPreferences } from "./user_company_preferences.js";
+
+export { freellmToolReceipts } from "./freellm_tool_receipts.js";

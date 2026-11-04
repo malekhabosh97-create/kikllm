@@ -17,7 +17,7 @@ export const freellmBrowserAdapter: ServerAdapterModule = {
         name: "model",
         label: "Model",
         type: "select",
-        defaultValue: "deepseek-normal",
+        defaultValue: "gemini-default",
         options: freellmModels.map((m) => ({ value: m.id, label: m.label })),
       },
     ],

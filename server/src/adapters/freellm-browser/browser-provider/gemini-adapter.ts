@@ -27,22 +27,13 @@ export class GeminiSiteAdapter extends BasePlaywrightSiteAdapter {
       profileDir,
       headless,
       chromePath: options?.chromePath,
+      embedded: options?.embedded,
     });
   }
 
   override async listModels(): Promise<LiveModelInfo[]> {
     return this.enqueue(async () => {
-      const context = await this.getContext();
-      const pages = context.pages();
-      let page = pages.find((p) => !p.isClosed());
-      if (!page) {
-        page = await context.newPage();
-      }
-
-      if (!page.url().includes("gemini.google.com")) {
-        await page.goto(this.config.url, { waitUntil: "domcontentloaded", timeout: 45000 });
-        await page.waitForTimeout(2000);
-      }
+      const page = await this.providerPage();
 
       const pickerBtn = await this.findModelPicker(page);
       if (!pickerBtn) {
@@ -81,7 +72,7 @@ export class GeminiSiteAdapter extends BasePlaywrightSiteAdapter {
         const parts = it.rawText.split(" | ");
         const label = parts[0] || it.rawText;
         const description = parts[1] || "";
-        const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const id = "gemini-" + label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
         return {
           id,
@@ -98,33 +89,25 @@ export class GeminiSiteAdapter extends BasePlaywrightSiteAdapter {
     const session = await super.newChat(modelId);
     const page = (session as any).getPage?.();
 
-    if (page && modelId && this.config.modelOptions?.[modelId]) {
-      const modelSpec = this.config.modelOptions[modelId];
-      try {
-        const pickerMatch = await this.findModelPicker(page);
-        if (pickerMatch) {
-          await pickerMatch.click();
-          await page.waitForTimeout(500);
 
-          if (modelSpec.selector) {
-            const item = await page.$(modelSpec.selector);
-            if (item) {
-              await item.click();
-              await page.waitForTimeout(500);
-            }
-          }
-          await page.keyboard.press("Escape").catch(() => {});
-
-          // Read the picker button's displayed label from live DOM
-          const observedLabel =
-            ((await pickerMatch.innerText()) || (await pickerMatch.getAttribute("aria-label")) || "")
-              .trim();
-          (session as any).observedModelLabel = observedLabel;
-          (session as any).requestedModelId = modelId;
-        }
-      } catch (e: any) {
-        console.warn(`[GeminiSiteAdapter] Could not switch to model ${modelId}:`, e.message);
+    if (page && modelId && !["gemini","gemini-default"].includes(modelId)) {
+      const wanted=this.config.modelOptions?.[modelId]?.label || modelId.replace(/^gemini-/,"").replace(/-/g," ");
+      const picker=await this.findModelPicker(page);
+      if(!picker)throw new Error("Model picker is unavailable; no fallback was selected: "+modelId);
+      await picker.click();
+      const choices=page.locator("gem-menu-item, [role='menuitem'], [role='option']");
+      const count=await choices.count();let selected=false;
+      for(let i=0;i<count;i++){
+        const item=choices.nth(i);if(!await item.isVisible())continue;
+        const label=(await item.innerText()).trim().split("\n")[0];
+        if(label.toLowerCase()!==wanted.toLowerCase())continue;
+        if(await item.getAttribute("aria-disabled")==="true")throw new Error("Requested model is locked: "+label);
+        await item.click();selected=true;break;
       }
+      if(!selected){await page.keyboard.press("Escape");throw new Error("Requested model is not available in the live account: "+wanted);}
+      const observed=(await picker.innerText()).trim();
+      if(!observed.toLowerCase().includes(wanted.toLowerCase()))throw new Error("Could not confirm the selected model: "+wanted);
+      (session as any).observedModelLabel=observed;
     }
 
     return session;
@@ -135,7 +118,7 @@ export class GeminiSiteAdapter extends BasePlaywrightSiteAdapter {
     for (const selector of this.config.modelMenu) {
       try {
         const el = await page.$(selector);
-        if (el) return el;
+        if (el && await el.isVisible()) return el;
       } catch {}
     }
     return null;

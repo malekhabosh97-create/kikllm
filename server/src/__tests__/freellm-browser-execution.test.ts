@@ -1,487 +1,249 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import path from "node:path";
+import { describe,it,expect,afterEach } from "vitest";
 import fs from "node:fs";
-import {
-  parseToolCall,
-  executeTool,
-  TOOL_INSTRUCTIONS,
-} from "../adapters/freellm-browser/tool-executor.js";
-import { assertSafeWorkspacePath } from "../services/file-mutation.js";
-
-describe("FreeLLM Browser Execution & Tool Suite", () => {
-  const workspaceRoot = fs.existsSync(path.resolve(process.cwd(), "server"))
-    ? process.cwd()
-    : path.resolve(process.cwd(), "..");
-
-  describe("Tool Protocol & Parsing (parseToolCall)", () => {
-    it("parses valid tool_call fenced block", () => {
-      const response = `Here is my plan to inspect the project:
-\`\`\`tool_call
-{
-  "callId": "call_inspect_1",
-  "tool": "get_project_context",
-  "arguments": { "path": "." }
-}
-\`\`\`
-I will await the result.`;
-
-      const toolCall = parseToolCall(response);
-      expect(toolCall).not.toBeNull();
-      expect(toolCall?.tool).toBe("get_project_context");
-      expect(toolCall?.callId).toBe("call_inspect_1");
-      expect(toolCall?.arguments).toEqual({ path: "." });
-    });
-
-    it("parses raw JSON tool call without markdown backticks", () => {
-      const response = `{"callId": "call_list_2", "tool": "list_dir", "arguments": {"path": "server"}}`;
-      const toolCall = parseToolCall(response);
-      expect(toolCall).not.toBeNull();
-      expect(toolCall?.tool).toBe("list_dir");
-      expect(toolCall?.callId).toBe("call_list_2");
-      expect(toolCall?.arguments).toEqual({ path: "server" });
-    });
-
-    it("parses create_agent action proposal block", () => {
-      const response = `I recommend creating a frontend specialist:
-\`\`\`json
-{
-  "action": "create_agent",
-  "name": "UI Specialist",
-  "role": "engineer",
-  "title": "React Frontend Dev",
-  "model": "deepseek-normal",
-  "systemPrompt": "Focus on high accessibility and smooth animations."
-}
-\`\`\``;
-
-      const toolCall = parseToolCall(response);
-      expect(toolCall).not.toBeNull();
-      expect(toolCall?.tool).toBe("create_agent");
-      expect(toolCall?.arguments.name).toBe("UI Specialist");
-      expect(toolCall?.arguments.model).toBe("deepseek-normal");
-      expect(toolCall?.arguments.systemPrompt).toContain("high accessibility");
-    });
-
-    it("returns null when model gives final natural language response without tools", () => {
-      const response = "All tasks have been completed and verified. Here is the final summary of the changes.";
-      const toolCall = parseToolCall(response);
-      expect(toolCall).toBeNull();
-    });
-
-    it("ignores illustrative/explanatory examples containing tool syntax in English", () => {
-      const response = `Here is an example of how you would call the tool, but do not execute it:
-\`\`\`tool_call
-{
-  "callId": "call_sample_1",
-  "tool": "run_command",
-  "arguments": {
-    "command": "rm -rf /"
+import os from "node:os";
+import path from "node:path";
+import crypto from "node:crypto";
+import { MemorySaver } from "@langchain/langgraph";
+import { parseToolCall, executeToolOutcome } from "../adapters/freellm-browser/tool-executor.js";
+import { runAgentTurnLoop } from "../adapters/freellm-browser/unified-engine.js";
+import { roleInstructions, ROLE_INSTRUCTIONS } from "../adapters/freellm-browser/role-instructions.js";
+import { BrowserSessionHub } from "../adapters/freellm-browser/browser-provider/session-hub.js";
+import { isProviderErrorReply } from "../adapters/freellm-browser/browser-provider/chat-session.js";
+import { classifyProviderProbe } from "../adapters/freellm-browser/browser-provider/probe.js";
+import { globalModelRouter } from "../adapters/freellm-browser/browser-provider/model-router.js";
+import { stageFileMutation,applyFileMutation } from "../services/file-mutation.js";
+const roots:string[]=[];
+function temp(){const root=fs.mkdtempSync(path.join(os.tmpdir(),"freellm-runtime-"));roots.push(root);return root;}
+afterEach(()=>{for(const root of roots.splice(0))fs.rmSync(root,{recursive:true,force:true});});
+const agent={id:"10000000-0000-4000-8000-000000000001",companyId:"20000000-0000-4000-8000-000000000001",name:"Developer",role:"engineer",adapterConfig:{model:"gemini-default"}};
+const call=(tool:string,args:Record<string,unknown>,id=crypto.randomUUID())=>({callId:id,tool,arguments:args});
+const reply=(tool:string,args:Record<string,unknown>,id?:string)=>"\`\`\`tool_call\n"+JSON.stringify(call(tool,args,id))+"\n\`\`\`";
+describe("FreeLLM isolated tool and graph regressions",()=>{
+  it("does not duplicate a saved role definition",()=>{
+    const initial=roleInstructions("ceo"),next=roleInstructions("ceo",initial);
+    expect(next).toBe(initial);expect(next.split(ROLE_INSTRUCTIONS.ceo)).toHaveLength(2);
+  });
+  it("returns only useful project commands",async()=>{
+    const root=temp();fs.writeFileSync(path.join(root,"package.json"),JSON.stringify({name:"fixture",scripts:{test:"node --test",dev:"node app.js",release:"unrelated",unused:"unrelated"}}));
+    const result=await executeToolOutcome(call("get_project_context",{}),root);
+    expect(result.data?.commands).toEqual({dev:"node app.js",test:"node --test"});
+  });
+  it("prevents a new calculator from being created in the platform source folder",async()=>{
+    const root=path.resolve(import.meta.dirname,"../../..");
+    await expect(runAgentTurnLoop({agentId:agent.id,agent,workspaceRoot:root,prompt:"اصنع لي الة حاسبة",intent:"work",transport:async()=>{throw new Error("must not dispatch");}})).rejects.toThrow(/مجلدًا مستقلًا/);
+  });
+  it("identifies provider-generated error replies without blocking normal text",()=>{
+    expect(isProviderErrorReply("gemini","Sorry, something went wrong. Please try your request again.")).toBe(true);
+    expect(isProviderErrorReply("gemini","I encountered an error doing what you asked. Could you try again?")).toBe(true);
+    expect(isProviderErrorReply("gemini","The tests found something wrong; here is the fix.")).toBe(false);
+    expect(isProviderErrorReply("deepseek","The server is busy. Please try again later.")).toBe(true);
+    expect(isProviderErrorReply("deepseek","Too many requests, please try again in 5s.")).toBe(true);
+    expect(isProviderErrorReply("deepseek","Here is the requested code implementation.")).toBe(false);
+  });
+  it("distinguishes connectivity from exact instruction following",()=>{
+    const nonce="FREELLM_fixture";
+    expect(classifyProviderProbe({status:"ok",text:nonce},nonce)).toMatchObject({passed:true,exactInstruction:true});
+    expect(classifyProviderProbe({status:"ok",text:"The requested token is "+nonce},nonce)).toMatchObject({passed:true,exactInstruction:false});
+    expect(classifyProviderProbe({status:"blocked",text:"",blocker:"provider_error",blockerDetails:"Provider failed"},nonce)).toMatchObject({passed:false,error:"Provider failed"});
+  });
+  it("rejects empty verification",async()=>{const result=await executeToolOutcome(call("verify_task",{}),temp());expect(result.ok).toBe(false);expect(result.verified).toBe(false);});
+  it("rejects missing deliverables",async()=>{const result=await executeToolOutcome(call("verify_task",{expectedFiles:["missing.txt"]}),temp());expect(result.ok).toBe(false);});
+  it("propagates a failing check",async()=>{const result=await executeToolOutcome(call("verify_task",{testCommand:'node -e "process.exit(1)"'}),temp());expect(result.ok).toBe(false);});
+  it("does not pretend a disconnected database created an agent",async()=>{const result=await executeToolOutcome(call("create_agent",{name:"Specialist",systemPrompt:"A detailed role instruction for testing."}),temp());expect(result.ok).toBe(false);});
+  it("does not pretend a disconnected database delegated work",async()=>{const result=await executeToolOutcome(call("delegate_task",{agentId:agent.id,title:"Task",description:"Implement a bounded task",acceptanceCriteria:["test passes"]}),temp());expect(result.ok).toBe(false);});
+  it("does not pretend a disconnected database sent a message",async()=>{const result=await executeToolOutcome(call("send_agent_message",{targetAgentId:agent.id,message:"review"}),temp());expect(result.ok).toBe(false);});
+  it("validates tool arguments",async()=>{const result=await executeToolOutcome(call("read_file",{}),temp());expect(result.ok).toBe(false);});
+  it("contains get_project_context within its selected root",async()=>{const result=await executeToolOutcome(call("get_project_context",{path:".."}),temp());expect(result.ok).toBe(false);});
+  it("contains file reads within their selected root",async()=>{const result=await executeToolOutcome(call("read_file",{path:"../outside.txt"}),temp());expect(result.ok).toBe(false);});
+  it("writes real changes and real diffs",async()=>{const root=temp();fs.writeFileSync(path.join(root,"note.txt"),"before\n");const result=await executeToolOutcome(call("propose_file_mutation",{relativePath:"note.txt",operation:"modify",content:"after\n"}),root);expect(result.ok).toBe(true);expect(result.data?.diff).toContain("-before");expect(result.data?.diff).toContain("+after");expect(fs.readFileSync(path.join(root,"note.txt"),"utf8")).toBe("after\n");});
+  it("rejects a stale staged edit",()=>{const root=temp();fs.writeFileSync(path.join(root,"note.txt"),"before");const staged=stageFileMutation(root,{relativePath:"note.txt",operation:"modify",content:"after"});fs.writeFileSync(path.join(root,"note.txt"),"human edit");expect(()=>applyFileMutation(root,staged)).toThrow(/conflict/i);expect(fs.readFileSync(path.join(root,"note.txt"),"utf8")).toBe("human edit");});
+  it("rejects foreign staging files",()=>{const root=temp(),other=temp();const staged=stageFileMutation(other,{relativePath:"other.txt",operation:"create",content:"content"});expect(()=>applyFileMutation(root,{...staged,relativePath:"note.txt"})).toThrow(/owned|boundary/);});
+  it("rejects a new file under a junction outside the workspace",()=>{
+    const root=temp(),other=temp();fs.symlinkSync(other,path.join(root,"outside"),"junction");
+    expect(()=>stageFileMutation(root,{relativePath:"outside/new.txt",operation:"create",content:"no"})).toThrow(/outside/);
+  });
+  it("accepts an explicit completed tool envelope",()=>{expect(parseToolCall(reply("list_dir",{}))?.tool).toBe("list_dir");});
+  it("accepts legitimate code containing illustrative language",()=>{expect(parseToolCall(reply("propose_file_mutation",{relativePath:"readme.txt",operation:"create",content:"على سبيل المثال: لا تنفذ هذا الأمر"}))?.tool).toBe("propose_file_mutation");});
+  it("ignores quoted tool examples",()=>{expect(parseToolCall("> "+reply("list_dir",{}).replaceAll("\n","\n> "))).toBeNull();});
+  it("ignores explanatory examples",()=>{expect(parseToolCall("على سبيل المثال\n"+reply("list_dir",{}))).toBeNull();});
+  it("ignores tool-looking JSON embedded in prose",()=>{expect(parseToolCall("Documentation: "+JSON.stringify(call("list_dir",{})))).toBeNull();});
+  it("rejects an unknown model provider",()=>{expect(()=>globalModelRouter.resolveRoute("unknown-model")).toThrow();});
+  it("routes DeepThink to the thinking mode",()=>{expect(globalModelRouter.resolveRoute("deepseek-deepthink").modelId).toBe("deepseek-reasoner");});
+  it("routes all registered web providers without silent fallback",()=>{for(const id of ["chatgpt","claude","qwen","grok","glm","arena"])expect(globalModelRouter.resolveRoute(id+"-default").siteId).toBe(id);});
+  it("does not call a narrative completion successful execution",async()=>{
+    let calls=0;const result=await runAgentTurnLoop({agentId:agent.id,agent,workspaceRoot:temp(),prompt:"Implement the task",intent:"work",transport:async()=>{calls++;return {status:"ok",text:"Done."};}});
+    expect(result.lastStatus).toBe("blocked");expect(calls).toBe(2);
+  });
+  it("propagates provider failure",async()=>{const result=await runAgentTurnLoop({agentId:agent.id,agent,workspaceRoot:temp(),prompt:"Question",transport:async()=>({status:"timeout",text:"partial"})});expect(result.lastStatus).toBe("failed");});
+  it("propagates cancellation",async()=>{const controller=new AbortController();controller.abort();const result=await runAgentTurnLoop({agentId:agent.id,agent,workspaceRoot:temp(),prompt:"Question",signal:controller.signal,transport:async()=>{throw new Error("Must not call");}});expect(result.lastStatus).toBe("cancelled");});
+  it("executes read-edit-test and completion through the real graph with a model fixture",async()=>{
+    const root=temp();fs.writeFileSync(path.join(root,"math.mjs"),"export const multiply=(a,b)=>a+b;\n");
+    fs.writeFileSync(path.join(root,"math.test.mjs"),'import assert from "node:assert/strict";import {multiply} from "./math.mjs";assert.equal(multiply(3,4),12);');
+    const responses=[reply("read_file",{path:"math.mjs"}),reply("propose_file_mutation",{relativePath:"math.mjs",operation:"modify",content:"export const multiply=(a,b)=>a*b;\n"}),reply("verify_task",{expectedFiles:["math.mjs"],testCommand:"node --test math.test.mjs"}),"Fixed and verified."];
+    const events:any[]=[];const result=await runAgentTurnLoop({agentId:agent.id,agent,workspaceRoot:root,prompt:"Fix multiplication",intent:"work",transport:async()=>({status:"ok",text:responses.shift()}),onEvent:event=>{events.push(event);}});
+    expect(result.lastStatus).toBe("completed");expect(result.verified).toBe(true);expect(result.toolCallsCount).toBe(3);
+    expect(events.filter(event=>event.type==="tool_result")).toHaveLength(3);expect(events.at(-1).status).toBe("completed");
+  });
+  it("continues after a provider error with partial work and avoids echoing a large diff",async()=>{
+    const root=temp(),marker="SOURCE_MARKER_".repeat(120);
+    const responses=[reply("propose_file_mutation",{relativePath:"app.js",operation:"create",content:"// "+marker+"\nconsole.log(1);"}),"I encountered an error doing what you asked. Could you try again?",reply("propose_file_mutation",{relativePath:"index.html",operation:"create",content:"<h1>Calculator</h1>"}),reply("verify_task",{expectedFiles:["app.js","index.html"],testCommand:"node --check app.js"}),"Completed and verified."];
+    const prompts:string[]=[],events:any[]=[];
+    const result=await runAgentTurnLoop({agentId:agent.id,agent,workspaceRoot:root,prompt:"Build an application",intent:"work",transport:async(params)=>{prompts.push(params.prompt);return {status:"ok",text:responses.shift()};},onEvent:event=>{events.push(event);}});
+    expect(result.lastStatus).toBe("completed");expect(result.verified).toBe(true);
+    expect(prompts[1]).not.toContain(marker);expect(prompts[1]).toContain("diffOmitted");
+    expect(prompts[2]).toContain("Do not repeat completed actions");
+    const write=events.find(event=>event.type==="tool_call"&&event.tool==="propose_file_mutation");
+    expect(write.args.content).not.toContain(marker);
+    expect(events.find(event=>event.type==="tool_result"&&event.tool==="propose_file_mutation").result).not.toContain(marker);
+  });
+  it("bounds recovery when a provider repeatedly fails",async()=>{
+    const root=temp(),responses=[reply("propose_file_mutation",{relativePath:"app.js",operation:"create",content:"console.log(1)"}),"Provider error","Still unavailable"];
+    let calls=0;const result=await runAgentTurnLoop({agentId:agent.id,agent,workspaceRoot:root,prompt:"Build an application",intent:"work",transport:async()=>{calls++;return {status:"ok",text:responses.shift()};}});
+    expect(result.lastStatus).toBe("blocked");expect(calls).toBe(3);expect(fs.existsSync(path.join(root,"app.js"))).toBe(true);
+  });
+  it("does not mark a failed verification complete",async()=>{
+    const responses=[reply("verify_task",{expectedFiles:["missing.txt"]}),"All done."];
+    const result=await runAgentTurnLoop({agentId:agent.id,agent,workspaceRoot:temp(),prompt:"Implement",intent:"work",transport:async()=>({status:"ok",text:responses.shift()})});expect(result.lastStatus).toBe("blocked");
+  });
+  it("reuses a completed checkpoint without repeating tools",async()=>{
+    const checkpoint=new MemorySaver(),root=temp();let toolCalls=0;
+    const responses=[reply("verify_task",{expectedFiles:["README.md"]}),"Verified."];fs.writeFileSync(path.join(root,"README.md"),"fixture");
+    const options={agentId:agent.id,agent,workspaceRoot:root,runId:crypto.randomUUID(),prompt:"Read project",intent:"work" as const,checkpointer:checkpoint,
+      transport:async()=>({status:"ok",text:responses.shift()}),execute:async()=>{toolCalls++;return {ok:true,status:"executed" as const,verified:true};}};
+    expect((await runAgentTurnLoop(options)).lastStatus).toBe("completed");expect((await runAgentTurnLoop(options)).lastStatus).toBe("completed");expect(toolCalls).toBe(1);
+  });
+});
+describe("Browser session isolation and recovery with provider fixtures",()=>{
+  function setup(){
+    const sessions:any[]=[];const adapter:any={
+      async newChat(){const value={tabId:crypto.randomUUID(),closed:false,sent:[] as string[],isClosed(){return this.closed;},url(){return "https://gemini.google.com/app/"+this.tabId;},async send(text:string){this.sent.push(text);},async waitForReply(){return {status:"ok",text:"response"};},async stop(){return true;}};sessions.push(value);return value;},
+      async resumeChat(){return this.newChat();},
+    };
+    const root=temp(),hub=new BrowserSessionHub(root,()=>adapter);
+    const params={companyId:agent.companyId,agentId:agent.id,model:"gemini-default",prompt:"task",instructions:"Role instructions",requestId:"one"};
+    return {hub,root,adapter,sessions,params};
   }
-}
-\`\`\`
-This was just an example demonstration.`;
-
-      const toolCall = parseToolCall(response);
-      expect(toolCall).toBeNull();
-    });
-
-    it("ignores illustrative examples containing tool syntax in Arabic", () => {
-      const response = `على سبيل المثال، يمكنك استخدام أداة تشغيل الأوامر كالتالي:
-\`\`\`tool_call
-{
-  "callId": "call_example_ar",
-  "tool": "run_command",
-  "arguments": {
-    "command": "npm test"
-  }
-}
-\`\`\`
-هذا نموذج توضيحي فقط ولا يجب تشغيله الآن. سأقوم بفحص الملفات أولاً.`;
-
-      const toolCall = parseToolCall(response);
-      expect(toolCall).toBeNull();
-    });
-
-    it("ignores blocks with example: true or callId marked as sample/demo", () => {
-      const response = `\`\`\`tool_call
-{
-  "callId": "demo-tool-call",
-  "tool": "run_command",
-  "arguments": { "command": "echo hello" },
-  "example": true
-}
-\`\`\``;
-
-      const toolCall = parseToolCall(response);
-      expect(toolCall).toBeNull();
-    });
-
-    it("correctly extracts a real executable tool call even when an illustrative example is present", () => {
-      const response = `For example, one might run:
-\`\`\`tool_call
-{
-  "callId": "sample_call",
-  "tool": "run_command",
-  "arguments": { "command": "echo demo" }
-}
-\`\`\`
-However, what we actually need to do right now is get the project context:
-\`\`\`tool_call
-{
-  "callId": "call_real_exec_1",
-  "tool": "get_project_context",
-  "arguments": {}
-}
-\`\`\``;
-
-      const toolCall = parseToolCall(response);
-      expect(toolCall).not.toBeNull();
-      expect(toolCall?.tool).toBe("get_project_context");
-      expect(toolCall?.callId).toBe("call_real_exec_1");
-    });
+  it("starts a fresh conversation only when requested and preserves the previous one",async()=>{
+    const {hub,sessions,params}=setup();await hub.turn(params);
+    await hub.turn({...params,prompt:"Resume verified work",requestId:"two",forceFreshSession:true});
+    expect(sessions).toHaveLength(2);expect(sessions[1].sent[0]).toContain("Role instructions");
+    expect(hub.list(agent.companyId)).toHaveLength(2);
+    await hub.turn({...params,prompt:"Continue",requestId:"three"});
+    expect(sessions).toHaveLength(2);expect(sessions[1].sent[1]).not.toContain("Role instructions");
   });
-
-  describe("Tool Execution (executeTool)", () => {
-    it("executes get_project_context and returns real repository metadata", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_ctx",
-          tool: "get_project_context",
-          arguments: {},
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("[PROJECT CONTEXT SUMMARY]");
-      expect(result).toContain("Root:");
-      expect(result).toContain("Top-level Items:");
-    });
-
-    it("executes list_dir and lists files with sizes", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_list",
-          tool: "list_dir",
-          arguments: { path: "server" },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("[DIRECTORY LISTING: server");
-      expect(result).toContain("[FILE] package.json");
-    });
-
-    it("executes read_file and returns numbered lines", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_read",
-          tool: "read_file",
-          arguments: { path: "package.json", maxLines: 15 },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("[FILE CONTENT: package.json");
-      expect(result).toContain("1: {");
-    });
-
-    it("prevents path traversal attacks in read_file", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_traversal",
-          tool: "read_file",
-          arguments: { path: "../../Windows/System32/drivers/etc/hosts" },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("Security Violation");
-    });
-
-    it("executes run_command and captures stdout and exit code", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_cmd",
-          tool: "run_command",
-          arguments: { command: "node -v" },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("[COMMAND RESULT (exit code 0)]");
-      expect(result).toContain("STDOUT:\nv");
-    });
-
-    it("rejects dangerous destructive commands in run_command", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_danger",
-          tool: "run_command",
-          arguments: { command: "rm -rf /" },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("[ERROR] Command rejected for security reasons.");
-    });
-
-    it("stages propose_file_mutation with SHA-256 and diff preview", async () => {
-      const relPath = "server/.paperclip/test-mutation-file.txt";
-      const result = await executeTool(
-        {
-          callId: "call_mut",
-          tool: "propose_file_mutation",
-          arguments: {
-            relativePath: relPath,
-            operation: "create",
-            content: "Hello from FreeLLM test mutation",
-          },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("[MUTATION STAGED SUCCESSFULLY]");
-      expect(result).toContain("Staged SHA-256:");
-      expect(result).toContain("Diff Preview:");
-      expect(result).toContain("awaiting Board / User approval");
-    });
+  it("does not reopen an uncertain submission by forcing a fresh session",async()=>{
+    const {hub,sessions,params}=setup();await hub.turn(params);
+    sessions[0].waitForReply=async()=>({status:"timeout",text:"partial"});
+    await hub.turn({...params,prompt:"second",requestId:"two"});
+    await expect(hub.turn({...params,prompt:"third",requestId:"three",forceFreshSession:true})).rejects.toThrow(/غير محسومة/);
   });
-
-  describe("Empirical Task Verification (verify_task)", () => {
-    it("reports PASSED when deliverables exist and tests exit with code 0", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_verify_pass",
-          tool: "verify_task",
-          arguments: {
-            taskId: "task-101",
-            expectedFiles: ["package.json"],
-            testCommand: "node -e \"process.exit(0)\"",
-          },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("Verdict: VERIFICATION PASSED");
-      expect(result).toContain("✅ Verified: 'package.json'");
-      expect(result).toContain("✅ Tests PASSED (Exit code 0)");
-    });
-
-    it("reports FAILED and rejects delivery when deliverable file is missing", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_verify_fail",
-          tool: "verify_task",
-          arguments: {
-            taskId: "task-102",
-            expectedFiles: ["non_existent_file_xyz123.txt"],
-          },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("Verdict: VERIFICATION FAILED");
-      expect(result).toContain("❌ Missing: 'non_existent_file_xyz123.txt' does not exist on disk");
-    });
-
-    it("reports FAILED and rejects delivery when verification test command fails", async () => {
-      const result = await executeTool(
-        {
-          callId: "call_verify_fail_cmd",
-          tool: "verify_task",
-          arguments: {
-            taskId: "task-103",
-            expectedFiles: ["package.json"],
-            testCommand: "node -e \"console.error('AssertionError: expected true to be false'); process.exit(1)\"",
-          },
-        },
-        workspaceRoot,
-      );
-
-      expect(result).toContain("Verdict: VERIFICATION FAILED");
-      expect(result).toContain("❌ Tests FAILED (Exit code 1)");
-      expect(result).toContain("AssertionError");
-    });
+  it("reopens an existing saved conversation without submitting a message",async()=>{
+    const {hub,root,adapter,sessions,params}=setup();await hub.turn(params);
+    const records=hub.list(agent.companyId),shown:string[]=[];
+    const restarted=new BrowserSessionHub(root,()=>adapter,async id=>{shown.push(id);});
+    const tab=await restarted.open(agent.companyId,records[0].key);
+    expect(shown).toEqual([tab.id]);expect(sessions).toHaveLength(2);expect(sessions[1].sent).toHaveLength(0);
+    expect(restarted.list(agent.companyId)[0].tabId).toBe(tab.id);
+    await expect(restarted.open("another-company",records[0].key)).rejects.toThrow();
   });
+  it("initializes once and caches a confirmed request",async()=>{
+    const {hub,sessions,params}=setup();await hub.turn(params);await hub.turn(params);expect(sessions[0].sent).toHaveLength(1);
+    await hub.turn({...params,prompt:"next",requestId:"two"});expect(sessions[0].sent[1]).not.toContain("Role instructions");
+  });
+  it("separates agents and projects on the same provider",async()=>{
+    const {hub,sessions,params}=setup();await hub.turn(params);await hub.turn({...params,agentId:crypto.randomUUID()});await hub.turn({...params,projectId:crypto.randomUUID()});expect(sessions).toHaveLength(3);
+  });
+  it("restores a closed tab and retains successful initialization",async()=>{
+    const {hub,root,adapter,sessions,params}=setup();await hub.turn(params);sessions[0].closed=true;
+    const restarted=new BrowserSessionHub(root,()=>adapter);await restarted.turn({...params,prompt:"next",requestId:"two"});expect(sessions).toHaveLength(2);expect(sessions[1].sent[0]).not.toContain("Role instructions");
+  });
+  it("does not retry an uncertain submitted message",async()=>{
+    const {hub,sessions,params}=setup();await hub.turn(params);
+    sessions[0].waitForReply=async()=>({status:"timeout",text:"partial"});
+    await hub.turn({...params,prompt:"second",requestId:"two"});
+    await expect(hub.turn({...params,prompt:"third",requestId:"three"})).rejects.toThrow(/غير محسومة/);expect(sessions[0].sent).toHaveLength(2);
+  });
+  it("creates, inspects, and integrates isolated task workspace delivery", async () => {
+    const root = temp();
+    const companyId = "20000000-0000-4000-8000-000000000001";
+    const projectId = "30000000-0000-4000-8000-000000000001";
+    const taskId = "40000000-0000-4000-8000-000000000001";
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "app", version: "1.0.0" }));
+    
+    // Prepare workspace
+    const prepResult = await executeToolOutcome(
+      call("prepare_task_workspace", { taskId }),
+      root,
+      { agent, companyId, projectId }
+    );
+    expect(prepResult.ok).toBe(true);
+    const wsCwd = prepResult.data?.workspace?.cwd;
+    expect(wsCwd).toBeDefined();
+    expect(fs.existsSync(wsCwd)).toBe(true);
 
-  describe("Team Management & Delegation Tools (DB-backed)", () => {
-    it("executes list_agents and formats agent roster", async () => {
-      const mockDb: any = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([
-              {
-                id: "agt-1",
-                name: "CEO - Gemini Argon",
-                role: "ceo",
-                title: "Executive Lead",
-                status: "idle",
-                adapterConfig: { model: "gemini-argon" },
-              },
-              {
-                id: "agt-2",
-                name: "Fullstack Dev",
-                role: "engineer",
-                title: "Fullstack Developer",
-                status: "busy",
-                adapterConfig: { model: "deepseek-normal" },
-              },
-            ]),
-          }),
-        }),
-      };
+    // Make a file change in the isolated workspace
+    fs.writeFileSync(path.join(wsCwd, "src.js"), 'console.log("hello");\n');
 
-      const result = await executeTool(
+    // Inspect delivery
+    const inspectResult = await executeToolOutcome(
+      call("inspect_task_delivery", { taskId }),
+      root,
+      { agent, companyId, projectId }
+    );
+    expect(inspectResult.ok).toBe(true);
+    expect(inspectResult.data?.inspection?.changes).toHaveLength(1);
+    expect(inspectResult.data?.inspection?.changes[0].relativePath).toBe("src.js");
+    const deliverySha256 = inspectResult.data?.inspection?.deliverySha256;
+
+    // Integrate delivery
+    const integrateResult = await executeToolOutcome(
+      call("integrate_task_delivery", { taskId, expectedDeliverySha256: deliverySha256, allowedPaths: ["src.js"] }),
+      root,
+      { agent, companyId, projectId, autonomousWrites: true }
+    );
+    expect(integrateResult.ok).toBe(true);
+    expect(fs.existsSync(path.join(root, "src.js"))).toBe(true);
+    expect(fs.readFileSync(path.join(root, "src.js"), "utf8")).toBe('console.log("hello");\n');
+  });
+  it("plans a project and enforces contract validation", async () => {
+    const root = temp();
+    const companyId = "20000000-0000-4000-8000-000000000001";
+    const projectId = "30000000-0000-4000-8000-000000000001";
+
+    const contractInput = {
+      goal: "Build a modular calculator web app",
+      kind: "code",
+      stack: ["vanilla", "html", "css", "js"],
+      acceptanceCriteria: [
+        { id: "crit-1", description: "Calculator UI renders and buttons work", expectedFiles: ["index.html"], command: "node -e \"require('node:fs').existsSync('index.html')\"" }
+      ],
+      modules: [
         {
-          callId: "call_roster",
-          tool: "list_agents",
-          arguments: {},
-        },
-        workspaceRoot,
-        undefined,
-        mockDb,
-        "comp-1",
-      );
+          id: "ui",
+          title: "UI module",
+          role: "frontend",
+          allowedPaths: ["index.html"],
+          acceptanceCriteriaIds: ["crit-1"],
+          dependencies: []
+        }
+      ],
+      reviewPolicy: "independent"
+    };
 
-      expect(result).toContain("[COMPANY AGENT ROSTER (2 agents)]");
-      expect(result).toContain("CEO - Gemini Argon [ID: agt-1]");
-      expect(result).toContain("Fullstack Dev [ID: agt-2]");
-    });
+    const planResult = await executeToolOutcome(
+      call("plan_project", contractInput),
+      root,
+      { agent: { ...agent, role: "ceo" }, companyId, projectId }
+    );
+    expect(planResult.ok).toBe(true);
+    expect(planResult.data?.contract?.modules[0].id).toBe("ui");
+    expect(planResult.data?.contract?.revision).toBe(1);
 
-    it("executes create_agent, writes instructions file, and records agent in DB", async () => {
-      const insertedAgent = {
-        id: "agt-new-1",
-        name: "DevOps Engineer",
-        role: "devops",
-        title: "CI/CD & Cloud Specialist",
-        status: "idle",
-      };
-
-      const mockDb: any = {
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([insertedAgent]),
-          }),
-        }),
-      };
-
-      const result = await executeTool(
-        {
-          callId: "call_create_ag",
-          tool: "create_agent",
-          arguments: {
-            name: "DevOps Engineer",
-            role: "devops",
-            title: "CI/CD & Cloud Specialist",
-            model: "gemini-flash",
-            systemPrompt: "Maintain robust pipelines, automated testing, and zero downtime deployments.",
-          },
-        },
-        workspaceRoot,
-        undefined,
-        mockDb,
-        "comp-1",
-      );
-
-      expect(result).toContain("[AGENT CREATED SUCCESSFULLY]");
-      expect(result).toContain("Agent ID: agt-new-1");
-      expect(result).toContain("Name: DevOps Engineer");
-      expect(result).toContain("Model: gemini-flash");
-      expect(result).toContain("Instructions Stored: Yes");
-      expect(mockDb.insert).toHaveBeenCalled();
-    });
-
-    it("executes delegate_task and registers real task with acceptance criteria in DB", async () => {
-      const createdTask = {
-        id: "tsk-888",
-        title: "Implement Auth Flow",
-        priority: "high",
-        status: "todo",
-      };
-
-      const mockDb: any = {
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([createdTask]),
-          }),
-        }),
-      };
-
-      const result = await executeTool(
-        {
-          callId: "call_delegate",
-          tool: "delegate_task",
-          arguments: {
-            agentId: "agt-2",
-            title: "Implement Auth Flow",
-            description: "Implement local OAuth2 device login flow.",
-            priority: "high",
-            acceptanceCriteria: [
-              "Unit tests pass",
-              "Tokens securely persisted in storage",
-            ],
-          },
-        },
-        workspaceRoot,
-        undefined,
-        mockDb,
-        "comp-1",
-      );
-
-      expect(result).toContain("[TASK DELEGATED SUCCESSFULLY]");
-      expect(result).toContain("Task ID: tsk-888");
-      expect(result).toContain("Assignee Agent: agt-2");
-      expect(result).toContain("Priority: high");
-      expect(result).toContain("Acceptance Criteria Defined: 2 items.");
-      expect(mockDb.insert).toHaveBeenCalled();
-    });
-
-    it("executes send_agent_message and records message in agent conversation thread", async () => {
-      const targetAgent = { id: "agt-target", name: "QA Auditor" };
-      const createdComment = { id: "cmt-999" };
-
-      let selectCount = 0;
-      const mockDb: any = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockImplementation(() => {
-              selectCount++;
-              if (selectCount === 1) {
-                // targetAgent query
-                return Promise.resolve([targetAgent]);
-              }
-              // existingIssue query with limit(1)
-              return {
-                limit: vi.fn().mockResolvedValue([{ id: "iss-123" }]),
-              };
-            }),
-          }),
-        }),
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([createdComment]),
-          }),
-        }),
-      };
-
-      const result = await executeTool(
-        {
-          callId: "call_msg",
-          tool: "send_agent_message",
-          arguments: {
-            targetAgentId: "agt-target",
-            message: "Please audit the staged file mutations before final delivery.",
-          },
-        },
-        workspaceRoot,
-        { agent: { id: "agt-ceo", name: "CEO" } },
-        mockDb,
-        "comp-1",
-      );
-
-      expect(result).toContain("[MESSAGE DELIVERED TO AGENT]");
-      expect(result).toContain("Delivered to: QA Auditor");
-      expect(result).toContain("Message ID: cmt-999");
-    });
+    // Verify contract is persisted
+    const contractsDir = path.join(root, ".freellm", "contracts");
+    expect(fs.existsSync(contractsDir)).toBe(true);
+    const files = fs.readdirSync(contractsDir);
+    expect(files.length).toBe(1);
+    expect(files[0].endsWith(".json")).toBe(true);
   });
 });

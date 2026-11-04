@@ -90,13 +90,13 @@
     },
     {
       "type": "rate_limit",
-      "selector": ".rate-limit-message, [data-test-id='rate-limit']",
-      "textPattern": "rate limit|too many requests|try again in [0-9]+|please wait"
+      "selector": ".rate-limit-message, [data-test-id='rate-limit'], [data-test-id='error-banner']:has-text('rate limit')",
+      "textPattern": "too many requests|rate limit exceeded"
     },
     {
       "type": "quota_exhausted",
-      "selector": ".quota-exceeded",
-      "textPattern": "quota exceeded|reached your daily limit|limit reached"
+      "selector": ".quota-exceeded, [data-test-id='quota-exceeded'], mat-snack-bar-container:has-text('limit reached')",
+      "textPattern": "reached your daily limit"
     }
   ],
   "completion": {

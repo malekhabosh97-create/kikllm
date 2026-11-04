@@ -105,3 +105,7 @@ server/check-*.mjs
 server/seed-*.mjs
 packages/db/seed-*.mjs
 cli/package.dev.json
+
+# Local FreeLLM runtime logs and state
+.freellm-runtime/
+ChatGPT Imag*

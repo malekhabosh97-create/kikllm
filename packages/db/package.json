@@ -43,7 +43,7 @@
     "clean": "node -e \"const fs=require('fs'); fs.rmSync('dist', {recursive:true, force:true});\"",
     "typecheck": "pnpm run check:migrations && tsc --noEmit",
     "generate": "pnpm run check:migrations && pnpm run clean && tsc -p tsconfig.json && drizzle-kit generate && pnpm run prune:snapshots",
-    "prune:snapshots": "ls src/migrations/meta/*_snapshot.json | sort -r | tail -n +6 | xargs rm -f",
+    "prune:snapshots": "node scripts/prune-snapshots.mjs",
     "migrate": "pnpm run check:migrations && tsx src/migrate.ts",
     "seed": "tsx src/seed.ts"
   },

@@ -46,6 +46,16 @@ function authorKind(comment: IssueChatComment): TaskChatAuthorKind {
   return "agent";
 }
 
+function displayCommentBody(comment: IssueChatComment, kind: TaskChatAuthorKind): string {
+  if(kind!=="agent")return comment.body;
+  const match=comment.body.match(/^أداة ([a-z_]+)\n\{"callId":/);
+  if(!match)return comment.body;
+  const labels:Record<string,string>={propose_file_mutation:"تعديل ملف",read_file:"قراءة ملف",verify_task:"التحقق",run_command:"تشغيل أمر",delegate_task:"تفويض مهمة",create_task:"إنشاء مهمة",create_agent:"إنشاء وكيل"};
+  const status=comment.body.includes('"ok":true')?"تم":comment.body.includes('"ok":false')?"تعذر":"سُجّل";
+  const pathMatch=comment.body.match(/"relativePath":"([^"]+)"/);
+  return (labels[match[1]]||match[1])+": "+status+(pathMatch?" — "+pathMatch[1]:"");
+}
+
 /** Shared bubble-footer time format ("2:34 PM") — also used by the description bubble (PAP-375). */
 export function formatTaskChatTimestamp(value: unknown): string | undefined {
   if (!value) return undefined;
@@ -121,7 +131,7 @@ export function commentsToTaskChatItems(
       author: kind,
       authorName,
       agent: effectiveAgentId(comment) ? ctx.agentMap?.get(effectiveAgentId(comment)!) ?? { id: effectiveAgentId(comment)! } : undefined,
-      text: comment.body,
+      text: displayCommentBody(comment, kind),
       sourceChannel: kind === "human" ? comment.metadata?.sourceChannel : undefined,
       timestamp: formatTaskChatCommentTimestamp(comment, kind),
       optimistic,

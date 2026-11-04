@@ -150,12 +150,14 @@ export function healthRoutes(
       return;
     }
 
+    const force = req.body?.force === true || req.query?.force === "true";
     const restartRequired =
+      force ||
       persistedDevServerStatus.dirty ||
       persistedDevServerStatus.changedPathCount > 0 ||
       persistedDevServerStatus.pendingMigrations.length > 0;
     if (!restartRequired) {
-      res.status(409).json({ error: "restart_not_required" });
+      res.status(200).json({ status: "already_fresh", restartRequired: false });
       return;
     }
 

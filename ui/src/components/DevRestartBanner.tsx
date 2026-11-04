@@ -30,7 +30,13 @@ function describeReason(devServer: DevServerHealthStatus): string {
   return "backend files changed since this server booted";
 }
 
-export function DevRestartBanner({ devServer }: { devServer?: DevServerHealthStatus }) {
+export function DevRestartBanner({
+  devServer,
+  onRestartRequested,
+}: {
+  devServer?: DevServerHealthStatus;
+  onRestartRequested?: () => void;
+}) {
   const [restartPending, setRestartPending] = useState(false);
   useEffect(() => {
     if (!restartPending) return;
@@ -59,8 +65,13 @@ export function DevRestartBanner({ devServer }: { devServer?: DevServerHealthSta
     setRestartPending(true);
     try {
       await healthApi.requestDevServerRestart();
+      onRestartRequested?.();
     } catch (error) {
       setRestartPending(false);
+      onRestartRequested?.();
+      if (error instanceof Error && (error.message.includes("restart_not_required") || error.message.includes("already_fresh"))) {
+        return;
+      }
       window.alert(error instanceof Error ? error.message : "Failed to request restart");
     }
   }

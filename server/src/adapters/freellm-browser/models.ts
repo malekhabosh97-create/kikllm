@@ -1,13 +1,8 @@
+// These IDs identify website modes; they do not assert a particular model version.
 export const freellmModels = [
-  { id: "deepseek-normal", label: "DeepSeek (Normal Mode)" },
-  { id: "deepseek-deepthink", label: "DeepSeek (DeepThink / Thinking Mode)" },
-  { id: "gemini-default", label: "Google Gemini (Default Active Mode)" },
-  { id: "gemini-pro", label: "Google Gemini (3.1 Pro - Advanced Reasoning)" },
-  { id: "gemini-flash", label: "Google Gemini (3.8 Flash - All-around Help)" },
-  { id: "gemini-flash-lite", label: "Google Gemini (3.5 Flash-Lite - Fastest Answers)" },
-  { id: "gemini-argon", label: "Google Gemini (4 Argon - Complex Tasks)" },
+  {id:"gemini-default",label:"Gemini — current account mode"},
+  {id:"deepseek-chat",label:"DeepSeek — standard mode"},
+  {id:"deepseek-reasoner",label:"DeepSeek — thinking mode (when available)"},
+  ...["chatgpt","claude","qwen","grok","glm","arena"].map(id=>({id:id+"-default",label:id+" — current account mode"})),
 ];
-
-export async function listModels(): Promise<Array<{ id: string; label: string }>> {
-  return freellmModels;
-}
+export async function listModels(){return freellmModels;}

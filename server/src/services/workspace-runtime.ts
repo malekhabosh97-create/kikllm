@@ -106,11 +106,18 @@ import {
 import { resolveTailscaleDnsName } from "./runtime-exposure/tailscale-hostname.js";
 
 export function resolveShell(): string {
-  const fallback = process.platform === "win32" ? "sh" : "/bin/sh";
+  const fallback = process.platform === "win32" ? process.env.ComSpec || "cmd.exe" : "/bin/sh";
   const shell = process.env.SHELL?.trim();
   if (!shell) return fallback;
   if (path.isAbsolute(shell) && !existsSync(shell)) return fallback;
   return shell;
+}
+
+export function resolveShellArguments(shell:string,command:string,login=false):string[]{
+  const name=path.basename(shell).toLowerCase();
+  if(process.platform==="win32"&&["cmd","cmd.exe"].includes(name))return ["/d","/s","/c",command];
+  if(/^(?:powershell|pwsh)(?:\.exe)?$/.test(name))return ["-NoLogo","-NoProfile","-NonInteractive","-Command",command];
+  return [login?"-lc":"-c",command];
 }
 
 /**
@@ -2983,7 +2990,7 @@ async function runWorkspaceCommand(input: {
   const shell = resolveShell();
   const proc = await executeProcess({
     command: shell,
-    args: ["-c", input.resolvedCommand ?? input.command],
+    args: resolveShellArguments(shell,input.resolvedCommand ?? input.command),
     cwd: input.cwd,
     env: input.env,
   });
@@ -3092,7 +3099,7 @@ async function recordWorkspaceCommandOperation(
       const shell = resolveShell();
       const result = await executeProcess({
         command: shell,
-        args: ["-c", input.resolvedCommand ?? input.command],
+        args: resolveShellArguments(shell,input.resolvedCommand ?? input.command),
         cwd: input.cwd,
         env: input.env,
       });
@@ -6430,10 +6437,11 @@ async function spawnLocalRuntimeService(input: StartLocalRuntimeServiceInput): P
   const serviceLog = await openLocalServiceLogFile(serviceKey);
   let child: ChildProcess;
   try {
-    child = spawn(shell, ["-lc", command], {
+    child = spawn(shell, resolveShellArguments(shell,command,true), {
       cwd: serviceCwd,
       env,
       detached: process.platform !== "win32",
+      windowsHide:true,
       // The service receives duplicate append-only file descriptors. Closing
       // Paperclip (or this parent handle below) cannot strand a request logger
       // on an orphaned socketpair during startup reconciliation.

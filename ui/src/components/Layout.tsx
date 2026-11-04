@@ -1,7 +1,7 @@
 import { SetupWizardSidebarOutlet } from "./SetupWizard";
 import { ChatSetupSidebarProvider } from "@/context/ChatSetupSidebarContext";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Outlet, useLocation, useNavigate, useNavigationType, useParams } from "@/lib/router";
 import { Sidebar } from "./Sidebar";
 import { CompanySettingsSidebar } from "./CompanySettingsSidebar";
@@ -237,6 +237,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
     pathname: string;
     surface: ContextualSidebarSurface | null;
   } | null>(null);
+  const queryClient = useQueryClient();
   const { data: health } = useQuery({
     queryKey: queryKeys.health,
     queryFn: () => healthApi.get(),
@@ -594,7 +595,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
         Skip to Main Content
       </a>
       <WorktreeBanner />
-      <DevRestartBanner devServer={health?.devServer} />
+      <DevRestartBanner devServer={health?.devServer} onRestartRequested={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.health }); }} />
       <div className={cn("min-h-0 flex-1", isMobile ? "w-full" : "flex overflow-clip")}>
         {isMobile && sidebarOpen && (
           <button

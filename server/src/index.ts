@@ -32,6 +32,7 @@ import { warnIfUnsupportedNodeVersion } from "@paperclipai/shared/node-version";
 import { and, eq } from "drizzle-orm";
 import {
   createDb,
+  withGracefulWindowsPostgresStop,
   ensurePostgresDatabase,
   formatEmbeddedPostgresError,
   getPostgresDataDirectory,
@@ -547,7 +548,7 @@ async function startServerWithDatabaseTeardown(
         }
         port = detectedPort;
         logger.info(`Using embedded PostgreSQL because no DATABASE_URL set (dataDir=${dataDir}, port=${port})`);
-        const createEmbeddedPostgres = () => new EmbeddedPostgres({
+        const createEmbeddedPostgres = () => withGracefulWindowsPostgresStop(new EmbeddedPostgres({
           databaseDir: dataDir,
           user: "paperclip",
           password: "paperclip",
@@ -556,7 +557,7 @@ async function startServerWithDatabaseTeardown(
           initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"],
           onLog: appendEmbeddedPostgresLog,
           onError: appendEmbeddedPostgresLog,
-        });
+        }), dataDir);
         embeddedPostgres = createEmbeddedPostgres();
 
         if (!clusterAlreadyInitialized) {
@@ -901,6 +902,7 @@ async function startServerWithDatabaseTeardown(
   // self-hosted: createApp falls back to its built-in kubernetes-only default.
   const managedPluginAutoInstall = managedConfig?.plugins.autoInstall ?? null;
   const app = await createApp(db as any, {
+    freellmDatabaseUrl: activeDatabaseConnectionString,
     prepareIdleDatabaseBackup: idleDatabaseBackupEnabled
       ? async () => (await runServerDatabaseBackup("idle")) !== null
       : undefined,
@@ -2072,6 +2074,7 @@ async function startServerWithDatabaseTeardown(
     if (exitProcess) process.exit(0);
   };
 
+  process.on("message", (message:unknown) => { if(message && typeof message==="object" && (message as {type?:string}).type==="freellm:shutdown")void shutdown("SIGTERM",true); });
   process.once("SIGINT", () => {
     void shutdown("SIGINT", true);
   });

@@ -1,11 +1,11 @@
-import path from "path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-      lexical: path.resolve(__dirname, "./node_modules/lexical/dist/Lexical.mjs"),
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      lexical: fileURLToPath(new URL("./node_modules/lexical/dist/Lexical.mjs", import.meta.url)),
     },
   },
   test: {

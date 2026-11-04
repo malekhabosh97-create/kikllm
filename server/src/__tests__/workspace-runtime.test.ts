@@ -49,6 +49,7 @@ import {
   resolveRuntimeProvisionCommand,
   resolveWorkspaceRuntimeReadinessTimeoutSec,
   resolveShell,
+  resolveShellArguments,
   sanitizeRuntimeServiceBaseEnv,
   setWorkspaceRuntimeExposureDepsForTests,
   startRuntimeServicesForWorkspaceControl,
@@ -5511,10 +5512,10 @@ describe("resolveShell (shell fallback)", () => {
     expect(resolveShell()).toBe("/bin/sh");
   });
 
-  it("falls back to sh (bare) on Windows when SHELL is unset", () => {
+  it("uses the native Windows command interpreter when SHELL is unset", () => {
     delete process.env.SHELL;
     Object.defineProperty(process, "platform", { value: "win32" });
-    expect(resolveShell()).toBe("sh");
+    expect(resolveShell()).toBe(process.env.ComSpec || "cmd.exe");
   });
 
   it("falls back to /bin/sh on darwin when SHELL is unset", () => {
@@ -5532,7 +5533,14 @@ describe("resolveShell (shell fallback)", () => {
   it("treats whitespace-only SHELL as unset and uses platform fallback", () => {
     process.env.SHELL = "   ";
     Object.defineProperty(process, "platform", { value: "win32" });
-    expect(resolveShell()).toBe("sh");
+    expect(resolveShell()).toBe(process.env.ComSpec || "cmd.exe");
+  });
+
+  it("passes Windows commands to the selected interpreter without Unix flags", () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    expect(resolveShellArguments("cmd.exe", "node preview.mjs")).toEqual(["/d", "/s", "/c", "node preview.mjs"]);
+    expect(resolveShellArguments("powershell.exe", "Get-Location")).toEqual(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "Get-Location"]);
+    expect(resolveShellArguments("bash", "pwd", true)).toEqual(["-lc", "pwd"]);
   });
 
   it("falls back when SHELL points to a missing absolute path", () => {

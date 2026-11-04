@@ -27,92 +27,38 @@ export class DeepSeekSiteAdapter extends BasePlaywrightSiteAdapter {
       profileDir,
       headless,
       chromePath: options?.chromePath,
+      embedded: options?.embedded,
     });
   }
 
-  override async listModels(): Promise<LiveModelInfo[]> {
-    return this.enqueue(async () => {
-      const context = await this.getContext();
-      const pages = context.pages();
-      let page = pages.find((p) => !p.isClosed());
-      if (!page) {
-        page = await context.newPage();
-      }
 
-      if (!page.url().includes("deepseek.com")) {
-        await page.goto(this.config.url, { waitUntil: "domcontentloaded", timeout: 45000 });
-        await page.waitForTimeout(2000);
-      }
-
-      // Check if DeepThink toggle is present in live DOM
-      const deepThinkToggle = await page.$(
-        "button:has-text('DeepThink'), div:has-text('DeepThink'), [aria-label*='DeepThink']",
-      );
-
-      const models: LiveModelInfo[] = [
-        {
-          id: "deepseek-chat",
-          label: "DeepSeek-V3",
-          description: "Default fast conversational model",
-          locked: false,
-          rawText: "DeepSeek-V3",
-        },
-      ];
-
-      if (deepThinkToggle) {
-        models.push({
-          id: "deepseek-reasoner",
-          label: "DeepSeek-R1 (DeepThink)",
-          description: "Reasoning model with thinking process",
-          locked: false,
-          rawText: "DeepThink (R1)",
-        });
-      }
-
-      return models;
-    });
-  }
-
-  override async newChat(modelId?: string): Promise<ChatSession> {
-    const session = await super.newChat(modelId);
-    const page = (session as any).getPage?.();
-
-    const targetModel = modelId || "deepseek-chat";
-    const wantsR1 = targetModel.includes("reasoner") || targetModel.includes("r1");
-
-    if (page) {
-      try {
-        const deepThinkBtn = await page.$(
-          "button:has-text('DeepThink'), div:has-text('DeepThink'), [aria-label*='DeepThink']",
-        );
-
-        if (deepThinkBtn) {
-          const isCurrentlyActive = await deepThinkBtn.evaluate((el: any) => {
-            return (
-              el.getAttribute("aria-checked") === "true" ||
-              el.classList.contains("active") ||
-              el.classList.contains("selected") ||
-              el.querySelector(".selected, .active") !== null
-            );
-          });
-
-          if (isCurrentlyActive !== wantsR1) {
-            await deepThinkBtn.click();
-            await page.waitForTimeout(400);
-          }
-
-          const observedLabel = wantsR1 ? "DeepSeek-R1 (DeepThink ON)" : "DeepSeek-V3 (DeepThink OFF)";
-          (session as any).observedModelLabel = observedLabel;
-          (session as any).requestedModelId = targetModel;
-        } else {
-          (session as any).observedModelLabel = "DeepSeek-V3";
-          (session as any).requestedModelId = targetModel;
-        }
-      } catch (e: any) {
-        console.warn("[DeepSeekSiteAdapter] Could not toggle model:", e.message);
-      }
+  private async thinkingButton(page:any){
+    for(const selector of ["button:has-text('DeepThink')","[role='button']:has-text('DeepThink')","button:has-text('深度思考')","[aria-label*='DeepThink']"]){
+      const candidate=page.locator(selector).first();if(await candidate.isVisible().catch(()=>false))return candidate;
     }
-
+    return null;
+  }
+  override async listModels():Promise<LiveModelInfo[]> {
+    return this.enqueue(async()=>{
+      const page=await this.providerPage(),toggle=await this.thinkingButton(page);
+      const modes:LiveModelInfo[]=[{id:"deepseek-chat",label:"الوضع العادي",locked:false}];
+      if(toggle)modes.push({id:"deepseek-reasoner",label:(await toggle.innerText()).trim()||"DeepThink",locked:await toggle.getAttribute("aria-disabled")==="true"});
+      return modes;
+    });
+  }
+  override async newChat(modelId?:string):Promise<ChatSession>{
+    const session=await super.newChat(modelId),page=(session as any).getPage();
+    const wantsThinking=/reasoner|r1|thinking/.test(modelId||"");
+    const button=await this.thinkingButton(page);
+    if(!button){if(wantsThinking)throw new Error("Thinking mode is unavailable in this account");return session;}
+    const active=()=>button.evaluate((el:HTMLElement)=>{
+      for(const attr of ["aria-pressed","aria-checked","data-state"]){const value=el.getAttribute(attr);if(value!==null)return value==="true"||value==="on"||value==="checked"||value==="active";}
+      return /(^|[ _-])(active|selected|checked)([ _-]|$)/.test(el.className);
+    });
+    if(await active()!==wantsThinking)await button.click();
+    if(await active()!==wantsThinking)throw new Error("Could not confirm the requested thinking mode");
+    (session as any).observedModelLabel=(await button.innerText()).trim()+" "+(wantsThinking?"ON":"OFF");
     return session;
   }
+
 }

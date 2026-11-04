@@ -4,7 +4,8 @@
   "private": true,
   "main": "main.cjs",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "prestart": "node prepare.cjs"
   },
   "devDependencies": {
     "electron": "^44.9.0"

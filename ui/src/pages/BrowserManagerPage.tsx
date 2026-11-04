@@ -1,231 +1,118 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Globe, RefreshCw, Plus, EyeOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Eye, EyeOff, RefreshCw, ShieldAlert, CheckCircle2, Clock, Sparkles, MessageSquare } from "lucide-react";
+import { useCompany } from "@/context/CompanyContext";
+import { freeLLMRequest } from "@/lib/freellm";
 
-export function BrowserManagerPage() {
-  const [status, setStatus] = useState<any>({ deepseek: "CHECKING", gemini: "CHECKING", isGenerating: false });
-  const [loading, setLoading] = useState(false);
+type Tab={id:string;provider:string;title:string;label?:string;url:string;visible:boolean;purpose?:string;busy?:boolean};
+type Provider={id:string;state:string;message?:string;qualified:boolean};
+type Status={connected:boolean;tabs:Tab[];providers:Provider[]};
+type Session={key:string;agentId:string;provider:string;url:string;tabId?:string;status:string};
+type Agent={id:string;name:string};
+const names:Record<string,string>={gemini:"جيمناي",deepseek:"ديب سيك",chatgpt:"شات جي بي تي",claude:"كلود",qwen:"كوين",grok:"غروك",glm:"جي إل إم",arena:"أرينا",research:"البحث"};
 
-  const fetchStatus = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/browser/status");
-      if (res.ok) {
-        const data = await res.json();
-        setStatus(data);
-      } else {
-        setStatus({ deepseek: "DISCONNECTED", gemini: "DISCONNECTED", isGenerating: false });
+export function BrowserManagerPage(){
+  const [status,setStatus]=useState<Status>({connected:false,tabs:[],providers:[]});
+  const [active,setActive]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false),[provider,setProvider]=useState("gemini");
+  const [sessions,setSessions]=useState<Session[]>([]),[agents,setAgents]=useState<Agent[]>([]),[notice,setNotice]=useState("");
+  const surface=useRef<HTMLDivElement>(null),activeRef=useRef(active);
+  activeRef.current=active;
+  const desktop=window.freellmDesktop;
+  const {selectedCompanyId}=useCompany();
+
+  async function refresh(){
+    try{
+      const next=await freeLLMRequest<Status>("/status");
+      setStatus(next);
+      setActive(previous=>next.tabs.some(tab=>tab.id===previous)?previous:next.tabs.find(tab=>tab.visible)?.id||"");
+      if(selectedCompanyId){
+        const [saved,response]=await Promise.all([
+          freeLLMRequest<Session[]>("/sessions?companyId="+selectedCompanyId),
+          fetch("/api/companies/"+selectedCompanyId+"/agents"),
+        ]);
+        if(!response.ok)throw new Error("تعذر قراءة أسماء الفريق");
+        setSessions(saved);setAgents(await response.json());
       }
-    } catch {
-      setStatus({ deepseek: "DISCONNECTED", gemini: "DISCONNECTED", isGenerating: false });
-    } finally {
-      setLoading(false);
-    }
-  };
+    }catch(reason){setError((reason as Error).message);}
+  }
+  useEffect(()=>{void refresh();const timer=setInterval(()=>void refresh(),8000);return()=>clearInterval(timer);},[selectedCompanyId]);
 
-  useEffect(() => {
-    fetchStatus();
-    const timer = setInterval(fetchStatus, 5000);
-    return () => clearInterval(timer);
-  }, []);
+  function updateBounds(){
+    if(!desktop||!surface.current)return;
+    const rect=surface.current.getBoundingClientRect();
+    void desktop.setBrowserBounds({x:rect.x,y:rect.y,width:rect.width,height:rect.height,visible:Boolean(activeRef.current)}).catch(reason=>setError((reason as Error).message));
+  }
+  useEffect(()=>{
+    if(!desktop||!surface.current)return;
+    const observer=new ResizeObserver(updateBounds);observer.observe(surface.current);
+    if(surface.current.parentElement)observer.observe(surface.current.parentElement);
+    window.addEventListener("resize",updateBounds);window.addEventListener("scroll",updateBounds,true);updateBounds();
+    return()=>{observer.disconnect();window.removeEventListener("resize",updateBounds);window.removeEventListener("scroll",updateBounds,true);void desktop.hideBrowser();};
+  },[desktop]);
+  useLayoutEffect(()=>{const frame=requestAnimationFrame(updateBounds);return()=>cancelAnimationFrame(frame);});
+  useEffect(()=>desktop?.onTabSelected(tab=>setActive(tab.id)),[desktop]);
+  useEffect(()=>{
+    if(!desktop)return;
+    if(active)void freeLLMRequest("/tabs/"+active+"/show",{}).catch(reason=>setError((reason as Error).message));
+    else void desktop.hideBrowser();
+  },[active,desktop]);
 
-  const handleShowWindow = async () => {
-    try {
-      const res = await fetch("/api/browser/show", { method: "POST" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        alert("تعذر إظهار النافذة: " + (body.error || body.message || `HTTP ${res.status}`));
-      }
-    } catch (e: any) {
-      alert("تعذر إظهار النافذة: " + e.message);
-    }
-  };
-
-  const handleMinimizeWindow = async () => {
-    try {
-      const res = await fetch("/api/browser/minimize", { method: "POST" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        alert("تعذر تصغير النافذة: " + (body.error || body.message || `HTTP ${res.status}`));
-      }
-    } catch (e: any) {
-      alert("تعذر تصغير النافذة: " + e.message);
-    }
-  };
-
-  const handleSwitchTab = async (platform: "deepseek" | "gemini") => {
-    try {
-      const res = await fetch("/api/browser/tab/open", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        alert("تعذر فتح التبويب: " + (body.error || body.message || `HTTP ${res.status}`));
-      }
-    } catch (e: any) {
-      alert("تعذر فتح التبويب: " + e.message);
-    }
-  };
-
-  const getBadge = (s?: string) => {
-    switch (s) {
-      case "READY":
-        return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40">جاهز / متصل</Badge>;
-      case "NEEDS_LOGIN":
-        return <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/40">يحتاج تسجيل دخول</Badge>;
-      case "NEEDS_HUMAN_INTERVENTION":
-        return <Badge className="bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse">مطلوب تدخل بشري (كابتشا)</Badge>;
-      default:
-        return <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/40">غير متصل</Badge>;
-    }
-  };
-
-  return (
-    <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            <span>إدارة المتصفح الحي (FreeLLM Browser Hub)</span>
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            التحكم في متصفح Chromium المباشر ومراقبة منصات الذكاء الاصطناعي المجانية (DeepSeek & Google Gemini).
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={fetchStatus} disabled={loading} className="gap-2">
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            تحديث الحالة
-          </Button>
-          <Button variant="default" size="sm" onClick={handleShowWindow} className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
-            <Eye className="w-3.5 h-3.5" />
-            إظهار المتصفح
-          </Button>
-          <Button variant="secondary" size="sm" onClick={handleMinimizeWindow} className="gap-2">
-            <EyeOff className="w-3.5 h-3.5" />
-            تصغير المتصفح
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* DeepSeek Card */}
-        <Card className="bg-[#1e293b] border-slate-800">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-sky-400" />
-                <span>DeepSeek Web</span>
-              </CardTitle>
-              {getBadge(status.deepseek)}
-            </div>
-            <CardDescription className="text-xs text-slate-400">
-              الوضع العادي (Instant) ووضع التفكير العميق (DeepThink)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-xs text-slate-300">
-            <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">الموديلات المتاحة:</span>
-                <span className="text-emerald-400 font-medium">Normal / DeepThink</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">رابط الخدمة:</span>
-                <span className="font-mono text-slate-200">https://chat.deepseek.com</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSwitchTab("deepseek")}
-                className="w-full text-xs gap-1.5"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                التبديل إلى تبويب DeepSeek
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Google Gemini Card */}
-        <Card className="bg-[#1e293b] border-slate-800">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>Google Gemini Web</span>
-              </CardTitle>
-              {getBadge(status.gemini)}
-            </div>
-            <CardDescription className="text-xs text-slate-400">
-              يدعم كافة أوضاع حسابك (Flash / Pro / Flash-Lite / Argon)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-xs text-slate-300">
-            <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">الموديلات المدعومة:</span>
-                <span className="text-amber-300 font-medium">3.1 Pro / 3.8 Flash / 4 Argon</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">رابط الخدمة:</span>
-                <span className="font-mono text-slate-200">https://gemini.google.com/app</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSwitchTab("gemini")}
-                className="w-full text-xs gap-1.5"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                التبديل إلى تبويب Gemini
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Global Status Banner */}
-      <Card className="bg-[#1e293b]/80 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold text-white">بيئة التشغيل المحلية الآمنة (.freellm-browser-profile)</CardTitle>
-          <CardDescription className="text-xs text-slate-400">
-            متصفح مرئي حقيقي يعمل على سطح مكتبك مع إدارة الجلسات والكوكيز
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-xs text-slate-300">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-slate-900/60 p-3 rounded border border-slate-800 flex items-center justify-between">
-              <span className="text-slate-400">القفل الذري (Atomic Lock):</span>
-              <span className="text-emerald-400 flex items-center gap-1 font-mono">
-                <CheckCircle2 className="w-3.5 h-3.5" /> نشط
-              </span>
-            </div>
-            <div className="bg-slate-900/60 p-3 rounded border border-slate-800 flex items-center justify-between">
-              <span className="text-slate-400">منفذ التحكم (CDP Port):</span>
-              <span className="text-slate-200 font-mono">127.0.0.1:9222</span>
-            </div>
-            <div className="bg-slate-900/60 p-3 rounded border border-slate-800 flex items-center justify-between">
-              <span className="text-slate-400">حالة التوليد الحالية:</span>
-              <span className="text-slate-200 font-medium">
-                {status.isGenerating ? "جاري التوليد الآن..." : "خامل / جاهز"}
-              </span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-blue-950/30 border border-blue-900/40 rounded text-blue-300 leading-relaxed">
-            💡 <strong>ملاحظة:</strong> يمكنك تشغيل المتصفح بجميع التبويبات بنقرة واحدة من سطح المكتب عبر ملف <code>FreeLLM_Browser.bat</code> أو اختصار <code>FreeLLM Browser</code>.
-          </div>
-        </CardContent>
-      </Card>
+  async function action(run:()=>Promise<void>){
+    setBusy(true);setError("");
+    try{await run();await refresh();}catch(reason){setError((reason as Error).message);}finally{setBusy(false);}
+  }
+  async function open(){await action(async()=>{const tab=await freeLLMRequest<Tab>("/providers/"+provider+"/open",{});setActive(tab.id);});}
+  const agentName=(id:string)=>agents.find(agent=>agent.id===id)?.name||"وكيل";
+  const sessionFor=(tab:Tab)=>sessions.find(session=>session.tabId===tab.id)||
+    (tab.purpose==="conversation"?sessions.find(session=>session.provider===tab.provider&&session.url===tab.url):undefined);
+  const saved=sessions.filter(session=>session.url&&!status.tabs.some(tab=>tab.id===session.tabId||(tab.purpose==="conversation"&&tab.provider===session.provider&&tab.url===session.url)));
+  return <div className="freellm-browser-layout flex flex-col gap-3 p-4" dir="rtl">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div><h1 className="flex items-center gap-2 text-xl font-semibold"><Globe className="size-5"/>متصفح الفريق</h1>
+      <p className="text-sm text-muted-foreground">افتح تبويب أي وكيل لمشاهدة محادثته. إخفاء المتصفح يبقي العمل في الخلفية.</p></div>
+      <Badge variant="outline">{status.connected?"متصل بالتطبيق":"افتح تطبيق سطح المكتب"}</Badge>
     </div>
-  );
+
+    <div className="flex min-h-0 shrink-0 items-center gap-2 overflow-x-auto rounded-lg border border-border p-2" role="tablist" aria-label="تبويبات المتصفح">
+      {status.tabs.map(tab=>{
+        const session=sessionFor(tab),title=tab.label||(session?agentName(session.agentId):tab.purpose==="conversation"?"محادثة وكيل":"حساب شخصي");
+        return <div key={tab.id} className="flex shrink-0 items-center rounded-md border border-border">
+          <Button role="tab" aria-selected={active===tab.id} variant={active===tab.id?"secondary":"ghost"} size="sm" disabled={busy}
+            title={tab.label||tab.title} onClick={()=>setActive(tab.id)}>
+            <span className="flex items-center gap-1.5 max-w-xs truncate">
+              {tab.busy && <span className="inline-block size-2 rounded-full bg-amber-500 animate-pulse" title="قيد التنفيذ" />}
+              <span>{title} · {names[tab.provider]||tab.provider}</span>
+              {tab.busy ? <Badge variant="secondary" className="text-[10px] px-1 py-0">نشط</Badge> : null}
+            </span>
+          </Button>
+          <Button variant="ghost" size="icon" aria-label={"إغلاق تبويب "+title} disabled={busy} onClick={()=>void action(async()=>{await freeLLMRequest("/tabs/"+tab.id+"/close",{});if(active===tab.id)setActive("");})}><X className="size-3"/></Button>
+        </div>;
+      })}
+      {saved.map(session=><Button key={session.key} role="tab" aria-selected={false} variant="outline" size="sm" disabled={busy||!status.connected} className="shrink-0"
+        onClick={()=>void action(async()=>{const tab=await freeLLMRequest<{id:string}>("/sessions/open",{companyId:selectedCompanyId,key:session.key});setActive(tab.id);})}>
+        <span className="max-w-xs truncate">{agentName(session.agentId)} · {names[session.provider]||session.provider} · محفوظة</span>
+      </Button>)}
+      {!status.tabs.length&&!saved.length&&<span className="text-sm text-muted-foreground">لا توجد تبويبات بعد. افتح منصة للبدء.</span>}
+    </div>
+
+    <div className="flex flex-wrap items-center gap-2">
+      <select aria-label="المنصة" className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={provider} onChange={event=>setProvider(event.target.value)}>
+        {Object.entries(names).filter(([id])=>id!=="research").map(([id,label])=><option key={id} value={id}>{label}</option>)}
+      </select>
+      <Button onClick={()=>void open()} disabled={busy||!status.connected}><Plus className="size-4"/>فتح المنصة</Button>
+      <Button variant="outline" disabled={busy||!status.connected} onClick={()=>void action(async()=>{setNotice("جارٍ اختبار إرسال وقراءة رد حقيقي…");const result=await freeLLMRequest<{passed:boolean;error?:string;capabilities?:{exactInstruction?:boolean}}>("/providers/"+provider+"/probe",{});setNotice(result.passed?(result.capabilities?.exactInstruction===false?"الاتصال يعمل، لكن النموذج لم يلتزم بصيغة الاختبار.":"نجح اختبار المحادثة الفعلي."):"لم ينجح الاختبار: "+result.error);})}>اختبار الاتصال</Button>
+      <Button variant="outline" onClick={()=>void refresh()} disabled={busy}><RefreshCw className="size-4"/>تحديث</Button>
+      <Button variant="ghost" onClick={()=>setActive("")}><EyeOff className="size-4"/>إخفاء العرض</Button>
+    </div>
+    {notice&&<p className="text-sm text-muted-foreground">{notice}</p>}
+    {sessions.filter(session=>session.status==="unknown").map(session=><div key={session.key} className="flex items-center justify-between gap-2 rounded-md border border-border p-3 text-sm"><span>نتيجة غير محسومة في {names[session.provider]}. افحص التبويب قبل بدء محادثة جديدة.</span><Button variant="outline" size="sm" onClick={()=>void action(async()=>{await freeLLMRequest("/sessions/reset",{companyId:selectedCompanyId,key:session.key});})}>بدء محادثة جديدة</Button></div>)}
+    {error&&<div role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">{error}</div>}
+    <div ref={surface} className="freellm-browser-surface flex min-h-0 flex-1 items-center justify-center rounded-lg border border-border bg-muted/20">
+      {!desktop?<div className="p-6 text-center text-muted-foreground">المتصفح المدمج يظهر داخل تطبيق سطح المكتب.</div>:!active?<div className="p-6 text-center text-muted-foreground">اختر تبويبًا من الأعلى لمشاهدة محادثته.</div>:null}
+    </div>
+    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+      {status.providers.filter(item=>status.tabs.some(tab=>tab.provider===item.id)).map(item=><span key={item.id}>{names[item.id]||item.id}: {item.state==="READY"?"واجهة المحادثة جاهزة":item.message||"تحتاج فحصًا"} · {item.qualified?"اجتازت اختبار المحادثة":"لم تجتز اختبار المحادثة بعد"}</span>)}
+    </div>
+  </div>;
 }

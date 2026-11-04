@@ -1,5 +1,5 @@
 #!/usr/bin/env -S node --import tsx
-import { spawn } from "node:child_process";
+import { spawn, type SpawnOptions } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -239,6 +239,20 @@ if (existingRunner) {
 }
 
 const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+
+function spawnPnpm(args: string[], options: SpawnOptions = {}) {
+  if (process.platform === "win32") {
+    const cmd = process.env.ComSpec || "cmd.exe";
+    return spawn(cmd, ["/d", "/s", "/c", pnpmBin, ...args], {
+      ...options,
+      shell: false,
+    });
+  }
+  return spawn(pnpmBin, args, {
+    ...options,
+    shell: false,
+  });
+}
 let previousSnapshot = collectWatchedSnapshot();
 let dirtyPaths = new Set<string>();
 let pendingMigrations: string[] = [];

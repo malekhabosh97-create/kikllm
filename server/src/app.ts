@@ -1,3 +1,4 @@
+import { configureFreeLLMRuntime, closeFreeLLMRuntime } from "./adapters/freellm-browser/runtime-context.js";
 import { idleAdmissionMiddleware, trackIdleRequestHandlers } from "./middleware/idle-admission.js";
 import { isIdleTaskDrainActive, trackIdleWork } from "./services/task-admission.js";
 import { customerSuccessRoutes } from "./routes/customer-success.js";
@@ -112,7 +113,8 @@ import { userProfileRoutes } from "./routes/user-profiles.js";
 import { sidebarBadgeRoutes } from "./routes/sidebar-badges.js";
 import { sidebarPreferenceRoutes } from "./routes/sidebar-preferences.js";
 import { announcementRoutes } from "./routes/announcements.js";
-import { freellmBrowserRouter } from "./routes/freellm-browser.js";
+import { freellmBrowserRouter, closeFreeLLMJobs } from "./routes/freellm-browser.js";
+import { freellmFactoryRouter } from "./routes/freellm-factory.js";
 import { serverVersion } from "./version.js";
 import { primaryAgentRoutes } from "./routes/primary-agent.js";
 import { resourceMembershipRoutes } from "./routes/resource-memberships.js";
@@ -480,6 +482,7 @@ export async function createApp(
   db: Db,
   opts: {
     cloudWarmStandby?: CloudWarmStandby;
+    freellmDatabaseUrl?: string;
     uiMode: UiMode;
     serverPort: number;
     storageService: StorageService;
@@ -700,7 +703,9 @@ export async function createApp(
   api.use(summarySlotRoutes(db));
   api.use(statusCardRoutes(db));
   api.use(teamsCatalogRoutes(db));
+  configureFreeLLMRuntime({ db, databaseUrl: opts.freellmDatabaseUrl, wake: connectionIntentHeartbeat.wakeup });
   api.use("/browser", freellmBrowserRouter(db));
+  api.use("/factory", freellmFactoryRouter(db));
   // The setup-token login session service. The router builds it and hands it
   // back through the callback below, so the shutdown hook can cancel every live
   // session (SR-4).
@@ -1420,6 +1425,8 @@ export async function createApp(
       // caller stops the database and the provider. A lease release that
       // fails stays a durable record for the startup reaper.
       await setupTokenLoginService?.shutdown();
+      await closeFreeLLMJobs();
+      await closeFreeLLMRuntime();
     })();
     return appServicesShutdown;
   };

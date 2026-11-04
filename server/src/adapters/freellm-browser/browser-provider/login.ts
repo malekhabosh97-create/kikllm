@@ -39,11 +39,13 @@ async function runLogin(siteName: string) {
         config,
         profileDir,
         headless: false,
+        embedded: false,
       })
     : new GeminiSiteAdapter({
         config,
         profileDir,
         headless: false,
+        embedded: false,
       });
 
   const context = await (adapter as any).getContext();

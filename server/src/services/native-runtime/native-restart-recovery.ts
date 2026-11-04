@@ -1028,7 +1028,10 @@ export async function claimNativeRestartRecoveries(input: {
 }
 
 export async function nativeRestartRecoverySummary(db: Db) {
-  const rows = await db
+  if (!db || typeof db.select !== "function") {
+    return {};
+  }
+  const query = db
     .select({
       state: nativeRunFinalizations.recoveryState,
       count: sql<number>`count(*)::int`,
@@ -1042,9 +1045,15 @@ export async function nativeRestartRecoverySummary(db: Db) {
         "bootstrap_incomplete",
         "blocked",
       ]),
-    )
-    .groupBy(nativeRunFinalizations.recoveryState);
+    );
+
+  const rows = typeof (query as any)?.groupBy === "function"
+    ? await (query as any).groupBy(nativeRunFinalizations.recoveryState)
+    : await query;
+
+  if (!Array.isArray(rows)) return {};
+
   return Object.fromEntries(
-    rows.map((row) => [row.state ?? "unknown", row.count]),
+    rows.map((row: any) => [row.state ?? "unknown", Number(row.count ?? 0)]),
   );
 }

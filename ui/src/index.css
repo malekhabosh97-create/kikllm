@@ -3417,3 +3417,11 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
 @media (max-height: 420px) {
   .agent-setup-popover { overflow-y: auto; }
 }
+
+:root { --freellm-shell-offset: 5rem; --freellm-browser-min-height: 28rem; --freellm-composer-height: 6rem; --freellm-file-preview-height: 24rem; --freellm-workbench-min-height: 38rem; }
+.freellm-browser-layout { height: calc(100dvh - var(--freellm-shell-offset)); min-height: var(--freellm-browser-min-height); }
+.freellm-workbench { height: calc(100dvh - var(--freellm-shell-offset)); min-height: var(--freellm-workbench-min-height); }
+.freellm-workbench-columns { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+.freellm-composer { min-height: var(--freellm-composer-height); }
+.freellm-file-preview { height: var(--freellm-file-preview-height); }
+@media (width < 60rem) { .freellm-workbench { height: auto; } .freellm-workbench-columns { grid-template-columns: minmax(0, 1fr); } }

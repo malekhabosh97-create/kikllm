@@ -1,6 +1,7 @@
 import type { ChatSession, LiveModelInfo, SiteAdapter } from "./types.js";
 import { GeminiSiteAdapter } from "./gemini-adapter.js";
 import { DeepSeekSiteAdapter } from "./deepseek-adapter.js";
+import { GenericSiteAdapter, WEB_PROVIDERS } from "./generic-adapter.js";
 
 export interface RoutedModel {
   modelId: string;
@@ -17,6 +18,7 @@ export class ModelRouter {
   constructor() {
     this.registerAdapter("gemini", new GeminiSiteAdapter());
     this.registerAdapter("deepseek", new DeepSeekSiteAdapter());
+    for (const provider of WEB_PROVIDERS) this.registerAdapter(provider.id, new GenericSiteAdapter(provider));
   }
 
   public registerAdapter(siteId: string, adapter: SiteAdapter): void {
@@ -40,7 +42,7 @@ export class ModelRouter {
 
     if (normalized.startsWith("deepseek") || normalized === "r1" || normalized === "v3") {
       const modelId =
-        normalized.includes("reasoner") || normalized.includes("r1")
+        normalized.includes("reasoner") || normalized.includes("r1") || normalized.includes("deepthink") || normalized.includes("thinking")
           ? "deepseek-reasoner"
           : "deepseek-chat";
       return { siteId: "deepseek", modelId };
@@ -49,10 +51,12 @@ export class ModelRouter {
     if (normalized.startsWith("gemini")) {
       let modelId = normalized;
       if (normalized === "gemini") {
-        modelId = "gemini-flash";
+        modelId = "gemini-default";
       }
       return { siteId: "gemini", modelId };
     }
+
+    for (const provider of WEB_PROVIDERS) { if (normalized === provider.id || normalized.startsWith(provider.id + "-")) return { siteId: provider.id, modelId: normalized }; }
 
     // Default fallback: if matching a registered site
     if (this.adapters.has(normalized)) {
@@ -60,7 +64,7 @@ export class ModelRouter {
     }
 
     // Default provider: deepseek
-    return { siteId: "deepseek", modelId: normalized || "deepseek-chat" };
+    throw new Error("منصة أو نموذج غير معروف: " + modelOrSite);
   }
 
   /**
@@ -74,7 +78,8 @@ export class ModelRouter {
     const sessionKey = options?.sessionKey;
     if (sessionKey && this.activeSessions.has(sessionKey)) {
       const existing = this.activeSessions.get(sessionKey)!;
-      return existing;
+      if (!existing.isClosed()) return existing;
+      this.activeSessions.delete(sessionKey);
     }
 
     const { siteId, modelId } = this.resolveRoute(modelOrSite);
