@@ -891,8 +891,8 @@ importers:
   server:
     dependencies:
       '@ai-sdk/openai':
-        specifier: 4.0.86
-        version: 4.0.86(zod@4.4.3)
+        specifier: 4.0.106
+        version: 4.0.106(zod@4.4.3)
       '@aws-sdk/client-s3':
         specifier: ^3.1141.0
         version: 3.1141.0
@@ -1356,8 +1356,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai@4.0.86':
-    resolution: {integrity: sha512-sbUHayMvjAYV6ELydYXFTr5UBX5qyYmRELqZR3tV0dieUhgUYd8dED9bwEgqZJNJU6V8GGLOlaEpL1ltbNXA/g==}
+  '@ai-sdk/openai@4.0.106':
+    resolution: {integrity: sha512-xBhSJCrgeTMZ4kCKABX8BJFtp5ZIJSS2qxvGMALA34TMyR6OVMe93cpU0mGWPFaVwPsWy2DWKb5+x7gkJ9SJ8w==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1368,8 +1368,18 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.72':
+    resolution: {integrity: sha512-M6QAztI84jWumQSvKcGOL91DxhChsWxn3D3gYtV0/7E1TPQg9BmLdIerOolUC/jghQbMlQrHyzp0hqdIhUZ2Rw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@4.0.24':
     resolution: {integrity: sha512-iztFqJTdxNN0ZzqZAAnVPMhRMaL1bfQFa3GIPAffWQ0+dP2FXIkyMD8kHeEI7EpB/C6TR45cqOkrS7YZZ1sATA==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider@4.0.35':
+    resolution: {integrity: sha512-yBz6fmLS8MSCIzy7NiHEUAq56ZLD4ZA1GR6bpXBxgbwUacP1La7LuwAr/xy9jSzthem4F8Xu2OrhvU/JrE9fYA==}
     engines: {node: '>=22'}
 
   '@antfu/install-pkg@1.1.0':
@@ -4915,6 +4925,7 @@ packages:
   '@smithy/core@3.35.1':
     resolution: {integrity: sha512-i4YPS4B6ts7bjn7UwLnGjiZdprOvHvgGobFZsYK3GIY3E5hIqtj0rReU69BcTpGp+fvtraSNXeG1l+jtJvF55w==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -8823,6 +8834,10 @@ packages:
     resolution: {integrity: sha512-dkrQXeHSaoamnItlYbmzG0wFYrM0ZwDxCIg0A7aKjTyyhh9svRzCNFEzV+Vm05/yehjCzjDZ31KXfGEjYSztDQ==}
     engines: {node: '>=20.18.1'}
 
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
+    engines: {node: '>=20.18.1'}
+
   undici@8.10.0:
     resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
     engines: {node: '>=22.19.0'}
@@ -9296,10 +9311,10 @@ snapshots:
       zod: 4.6.5
     optional: true
 
-  '@ai-sdk/openai@4.0.86(zod@4.4.3)':
+  '@ai-sdk/openai@4.0.106(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 4.0.24
-      '@ai-sdk/provider-utils': 5.0.56(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.35
+      '@ai-sdk/provider-utils': 5.0.72(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/provider-utils@5.0.56(zod@4.4.3)':
@@ -9321,7 +9336,20 @@ snapshots:
       zod: 4.6.5
     optional: true
 
+  '@ai-sdk/provider-utils@5.0.72(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.35
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      undici: 7.30.1
+      zod: 4.4.3
+
   '@ai-sdk/provider@4.0.24':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.35':
     dependencies:
       json-schema: 0.4.0
 
@@ -17308,6 +17336,8 @@ snapshots:
   undici@6.28.1: {}
 
   undici@7.30.0: {}
+
+  undici@7.30.1: {}
 
   undici@8.10.0: {}
 
