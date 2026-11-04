@@ -75,7 +75,7 @@
   },
   "devDependencies": {
     "@paperclipai/plugin-sdk": "workspace:*",
-    "@sentry/browser": "10.71.0",
+    "@sentry/browser": "11.10.0",
     "@storybook/addon-a11y": "10.6.0",
     "@storybook/addon-docs": "10.6.0",
     "@storybook/react-vite": "10.5.10",
